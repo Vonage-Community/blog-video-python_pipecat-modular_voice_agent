@@ -171,6 +171,16 @@ def test_errors_name_the_failed_stage(settings, transport, service, stage, categ
     assert "AbCdEf0123456789xyz" not in message
 
 
+def test_error_messages_drop_request_headers():
+    frame = ErrorFrame(
+        "rejected (status 401): headers: {'User-Agent': 'sdk', 'Authorization': 'x'}, "
+        "status_code: 401, body: invalid credentials"
+    )
+    message = describe_failure("Speech-to-text (Deepgram)", frame)
+    assert "User-Agent" not in message
+    assert message.endswith("status_code: 401, body: invalid credentials")
+
+
 def test_errors_without_a_service_are_blamed_on_vonage():
     assert failed_stage(ErrorFrame("connection lost")) == "Vonage Video"
 

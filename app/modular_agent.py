@@ -27,6 +27,7 @@ never talks to any of them directly: every sound reaches you through Vonage Vide
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import numpy as np
@@ -281,9 +282,14 @@ def failed_stage(frame: ErrorFrame) -> str:
     return "Vonage Video"
 
 
+# Provider SDKs put the full request headers in some errors. They're noise on the page.
+_HEADERS = re.compile(r"headers: \{.*?\},?\s*")
+
+
 def describe_failure(stage: str, frame: ErrorFrame) -> str:
     hint = _HINTS.get(stage, {}).get(frame.category, "") if frame.category else ""
-    return " ".join(part for part in (f"{stage} failed: {redact(frame.error)}", hint) if part)
+    error = _HEADERS.sub("", redact(frame.error))
+    return " ".join(part for part in (f"{stage} failed: {error}", hint) if part)
 
 
 class MicrophoneGate(FrameProcessor):
