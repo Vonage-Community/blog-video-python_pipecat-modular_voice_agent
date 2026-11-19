@@ -198,6 +198,26 @@ Each stage is configured on its own:
 - **Language:** set `DEEPGRAM_LANGUAGE` (for example `es`), and the prompt already tells
   the agent to reply in the language you speak. `eleven_flash_v2_5` speaks 32 languages.
 - **Prompt:** edit `SYSTEM_INSTRUCTION` in [`app/modular_agent.py`](app/modular_agent.py).
+- **Interruptions:** while the agent talks, it stops once Deepgram has heard three of
+  your words, so "okay" or "mm-hm" doesn't cut it off. Change `INTERRUPT_MIN_WORDS` in
+  `app/modular_agent.py` to make it more or less eager.
+
+### How long replies take
+
+The server logs a `Latency:` line for each reply, showing where the time went. On
+2026-11-19, over seven replies, the agent took 0.94 to 1.32 seconds (typically about
+1.0 s) from deciding you'd stopped talking to sending its first audio:
+
+| Stage | Typical |
+|---|---|
+| Silence before the turn can end (VAD) | 0.20 s |
+| Deepgram final transcript | 0.10 s |
+| OpenAI first words (`gpt-4.1`) | 0.46 s |
+| Waiting for a full sentence | 0.07 s |
+| ElevenLabs first audio | 0.18 s |
+
+The trip through Vonage to your browser comes on top. OpenAI is the largest share,
+so a faster model is the first thing to try if you want quicker replies.
 
 Restart `docker compose up` after changing `.env`.
 

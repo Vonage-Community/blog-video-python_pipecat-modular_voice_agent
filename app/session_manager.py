@@ -387,6 +387,8 @@ class SessionManager:
         """
         while True:
             line = await session.transcripts.get()
+            if session.stop_requested.is_set():
+                continue  # the browser is leaving; nobody would receive it
             try:
                 await self._run_blocking(
                     self._video.send_signal,

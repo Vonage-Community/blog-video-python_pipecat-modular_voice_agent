@@ -71,13 +71,14 @@ Set `AGENT_MODE=modular` and `LOG_TRANSCRIPTS=true`, then restart.
       earlier turns, never repeats a reply, and never answers its own voice.
 - [ ] Pause mid-sentence ("I'd like to know about... the moon"): the agent waits
       instead of answering the half sentence (Smart Turn).
-- [ ] Talk over a long answer: **it stops** and listens (interruption). The next
+- [ ] Say "okay" while it's talking: it keeps going. Say a full sentence over it:
+      **it stops** and listens (interruption). The next
       *Agent said:* line ends where you interrupted and is marked *(interrupted)*.
 - [ ] **Mute**: the badge shows *Muted*, and the agent doesn't react to you speaking.
       **Unmute**: it hears you again.
 - [ ] The status alternates between *The AI agent is speaking* and *Listening…* / *Your turn*.
 - [ ] **Leave**: logs show `ended (left)` and the agent process exits.
-- [ ] Note the greeting latency and any audio glitches below.
+- [ ] Note the `Latency:` lines from the logs and any audio glitches below.
 - [ ] Change `ELEVENLABS_VOICE_ID` to another voice and restart: the agent speaks in it.
 - [ ] Set `LOG_TRANSCRIPTS=false` afterwards.
 

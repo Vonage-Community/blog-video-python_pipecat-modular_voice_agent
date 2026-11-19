@@ -41,6 +41,28 @@ The transcript panel mid-conversation: *Deepgram heard:* and *Agent said:* lines
 marked *(interrupted)*. It shows the text between the stages, which a speech-to-speech
 model never exposes.
 
+## Measured response time (2026-11-19, arm64 Docker Desktop, seven replies)
+
+From the agent deciding the user stopped to its first audio leaving the container:
+0.94 to 1.32 s, typically 1.04 s. VAD silence 0.20 s, Deepgram 0.05 to 0.14 s, Smart
+Turn under 0.01 s (once 0.11 s), OpenAI `gpt-4.1` first token 0.39 to 0.77 s, sentence
+aggregation 0 to 0.16 s, ElevenLabs first audio 0.15 to 0.21 s. Vonage network time to
+the browser not measured. Present these as measured numbers, with OpenAI as the
+obvious place to experiment (a faster model), not as a benchmark.
+
+## Lessons from the live runs
+
+- A one-word "Okay." interrupted the agent mid-answer. `MinWordsUserTurnStartStrategy`
+  (3 words while the agent talks) fixed it: a good "tune each stage" moment.
+- Without keyterms, Deepgram heard "Pipecat" once as "PIPECAT" and once as "Pipe cut".
+  With `DEEPGRAM_KEYTERMS=Vonage,Pipecat` it wrote "Pipecat". It also heard "Aronov" as
+  "Aronoff", another keyterm candidate.
+- `gpt-4.1` doesn't know what Pipecat is. Worth one line: transcription was right, the
+  model's knowledge wasn't, and the transcript panel shows which.
+- The ElevenLabs dashboard's voice and model don't affect API calls.
+- vonage-python-sdk#323: a JSON request (`send_signal`) breaks later session creation
+  (HTTP 415). One sentence in the post, since readers who add signals will hit it.
+
 ## Most educational code excerpts
 
 1. **The pipeline list** in `ModularAgent.build_pipeline`: one line per stage.

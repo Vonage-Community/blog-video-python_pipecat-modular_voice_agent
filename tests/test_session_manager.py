@@ -252,3 +252,13 @@ async def test_a_failed_signal_does_not_end_the_call(settings):
     await asyncio.sleep(0.05)
     assert not created.session.finished
     await manager.shutdown()
+
+
+async def test_no_transcript_signals_once_the_call_is_ending(settings):
+    video = FakeVideo()
+    manager, _ = make_manager(settings, video=video)
+    created = await manager.create_session()
+    created.session.request_end(EndReason.LEFT)
+    created.session.transcript("agent", "goodbye", False)
+    await manager.end_session(created.session, EndReason.LEFT)
+    assert video.signals == []

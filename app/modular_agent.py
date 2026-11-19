@@ -59,6 +59,10 @@ from pipecat.transports.vonage.video_connector import (
     VonageVideoConnectorTransport,
     VonageVideoConnectorTransportParams,
 )
+from pipecat.turns.user_start.min_words_user_turn_start_strategy import (
+    MinWordsUserTurnStartStrategy,
+)
+from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.utils.errors import ErrorCategory
 from pipecat.workers.runner import WorkerRunner
 
@@ -77,6 +81,9 @@ You can't browse the internet or look up today's news, so say so instead of
 guessing about current events.
 If you are not sure about something, say so. If anyone asks, you are an AI
 model, not a human."""
+
+# Words you must say over the agent before it stops talking.
+INTERRUPT_MIN_WORDS = 3
 
 GREETING_PROMPT = (
     "The user has just joined the call and can hear you now. Greet them in one short "
@@ -356,10 +363,17 @@ class ModularAgent(VonageAgent):
         # No speech-to-speech model decides when you've finished talking anymore, so
         # the user aggregator does: Silero VAD hears speech start and stop, and
         # Pipecat's default Smart Turn v3 model decides whether the sentence is done.
-        # Both run locally on the CPU. Speaking over the agent interrupts it.
+        # Both run locally on the CPU.
         user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
             context,
-            user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
+            user_params=LLMUserAggregatorParams(
+                vad_analyzer=SileroVADAnalyzer(),
+                user_turn_strategies=UserTurnStrategies(
+                    # While the agent talks, it only stops once Deepgram has heard
+                    # three words, so "okay" or "mm-hm" doesn't cut it off.
+                    start=[MinWordsUserTurnStartStrategy(min_words=INTERRUPT_MIN_WORDS)],
+                ),
+            ),
         )
 
         # The text between the stages: what Deepgram heard, and what the agent said.

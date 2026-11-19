@@ -28,6 +28,9 @@ from pipecat.transports.vonage.video_connector import (  # noqa: E402
     VonageVideoConnectorTransport,
     VonageVideoConnectorTransportParams,
 )
+from pipecat.turns.user_start.min_words_user_turn_start_strategy import (  # noqa: E402
+    MinWordsUserTurnStartStrategy,
+)
 from pipecat.utils.errors import ErrorCategory  # noqa: E402
 
 from app.agent_process import ProcessAgent  # noqa: E402
@@ -181,6 +184,18 @@ def test_error_messages_drop_request_headers():
     message = describe_failure("Speech-to-text (Deepgram)", frame)
     assert "User-Agent" not in message
     assert message.endswith("status_code: 401, body: invalid credentials")
+
+
+def test_short_replies_do_not_interrupt_the_agent(settings, transport):
+    agent = ModularAgent(settings, CONNECTION, RecordedEvents())
+    worker = agent.build_pipeline(transport)
+    aggregator = next(
+        p for p in pipeline_processors(worker) if type(p).__name__ == "LLMUserAggregator"
+    )
+    strategies = aggregator._params.user_turn_strategies
+    assert [type(s) for s in strategies.start] == [MinWordsUserTurnStartStrategy]
+    assert strategies.start[0]._min_words == 3
+    assert strategies.stop  # Smart Turn defaults are kept
 
 
 def test_no_keyterms_sends_none(settings, transport):

@@ -20,6 +20,11 @@ Not tagged yet: waiting for the live manual test (`docs/MANUAL_TEST.md`).
 - A transcript panel showing what Deepgram heard and what the agent said, delivered
   as Vonage Video signals from the server and never stored.
 - `DEEPGRAM_KEYTERMS` for Deepgram keyterm prompting.
+- Short replies ("okay") no longer interrupt the agent: three words are needed while
+  it talks (`MinWordsUserTurnStartStrategy`).
+- A `Latency:` log line per reply, from Pipecat's `UserBotLatencyObserver`.
+- Signals go through a separate Vonage client (vonage-python-sdk#323), and none are
+  sent once a call is ending.
 - The prompt tells the agent it can't look up current events.
 - `AGENT_MODE=echo` diagnostic that checks Vonage audio in both directions without
   any AI provider.
