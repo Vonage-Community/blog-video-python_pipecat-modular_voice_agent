@@ -30,6 +30,7 @@ def test_valid_environment_loads_with_defaults(valid_env):
     assert settings.openai_model == "gpt-4.1"
     assert settings.elevenlabs_voice_id == "l7kNoIfnJKPg7779LI2t"
     assert settings.elevenlabs_model == "eleven_flash_v2_5"
+    assert settings.deepgram_keyterms == ()
     assert settings.agent_mode == "modular"
     assert settings.max_active_sessions == 1
     assert settings.max_session_seconds == 600
@@ -197,3 +198,13 @@ def test_log_output_is_redacted(capsys):
     assert "eyJhbGciOiJSUzI1NiJ9.eyJhIjoxfQ.c2ln" not in err
     assert "sk-[redacted]" in err
     assert "[jwt redacted]" in err
+
+
+def test_keyterms_are_split_and_trimmed(valid_env):
+    settings = load_settings({**valid_env, "DEEPGRAM_KEYTERMS": " Vonage, Pipecat ,,ElevenLabs "})
+    assert settings.deepgram_keyterms == ("Vonage", "Pipecat", "ElevenLabs")
+
+
+def test_too_many_keyterms_are_rejected(valid_env):
+    terms = ",".join(f"term{i}" for i in range(51))
+    assert "at most 50" in problems_for({**valid_env, "DEEPGRAM_KEYTERMS": terms})[0]

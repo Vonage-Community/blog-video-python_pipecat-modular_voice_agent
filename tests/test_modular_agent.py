@@ -93,6 +93,7 @@ def test_services_use_the_configured_models_and_voice(settings, transport):
         settings,
         deepgram_model="nova-3-medical",
         deepgram_language="en-GB",
+        deepgram_keyterms=("Vonage", "Pipecat"),
         openai_model="gpt-4.1-mini",
         elevenlabs_voice_id="OZ0L6eISlOejga3XjDFt",
         elevenlabs_model="eleven_multilingual_v2",
@@ -103,6 +104,7 @@ def test_services_use_the_configured_models_and_voice(settings, transport):
     llm = by_type[OpenAILLMService]._settings
     tts = by_type[ElevenLabsTTSService]._settings
     assert (stt.model, str(stt.language)) == ("nova-3-medical", "en-GB")
+    assert stt.keyterm == ["Vonage", "Pipecat"]
     assert llm.model == "gpt-4.1-mini"
     assert "spoken aloud" in llm.system_instruction
     assert (tts.model, tts.voice) == ("eleven_multilingual_v2", "OZ0L6eISlOejga3XjDFt")
@@ -179,6 +181,21 @@ def test_error_messages_drop_request_headers():
     message = describe_failure("Speech-to-text (Deepgram)", frame)
     assert "User-Agent" not in message
     assert message.endswith("status_code: 401, body: invalid credentials")
+
+
+def test_no_keyterms_sends_none(settings, transport):
+    worker = ModularAgent(settings, CONNECTION, RecordedEvents()).build_pipeline(transport)
+    stt = next(p for p in pipeline_processors(worker) if isinstance(p, DeepgramSTTService))
+    assert stt._settings.keyterm is None
+
+
+def test_transcripts_reach_the_events_and_skip_blank_text(settings, transport):
+    events = RecordedEvents()
+    agent = ModularAgent(settings, CONNECTION, events)
+    agent._send_transcript("user", "hello")
+    agent._send_transcript("agent", "   ")
+    agent._send_transcript("agent", "hi there", interrupted=True)
+    assert events.transcripts == [("user", "hello", False), ("agent", "hi there", True)]
 
 
 def test_errors_without_a_service_are_blamed_on_vonage():

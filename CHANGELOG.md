@@ -17,5 +17,9 @@ Not tagged yet: waiting for the live manual test (`docs/MANUAL_TEST.md`).
   then the agent greets once.
 - Errors that name the failed stage, with a hint per error category, and only end the
   session when a service can't continue.
+- A transcript panel showing what Deepgram heard and what the agent said, delivered
+  as Vonage Video signals from the server and never stored.
+- `DEEPGRAM_KEYTERMS` for Deepgram keyterm prompting.
+- The prompt tells the agent it can't look up current events.
 - `AGENT_MODE=echo` diagnostic that checks Vonage audio in both directions without
   any AI provider.

@@ -60,14 +60,19 @@ Set `AGENT_MODE=modular` and `LOG_TRANSCRIPTS=true`, then restart.
 - [ ] Speak before the greeting finishes connecting: nothing you said earlier is
       answered (the microphone gate drops audio until the browser is ready).
 - [ ] Ask a question: it answers out loud within a second or two, in the ElevenLabs voice.
-- [ ] Logs show a `Transcript user:` line that matches what you said (Deepgram) and a
-      `Transcript agent:` line that matches what you heard (OpenAI, then ElevenLabs).
+- [ ] The transcript panel shows *Deepgram heard:* lines that match what you said and
+      *Agent said:* lines that match what you heard. The logs show the same lines as
+      `Transcript user:` and `Transcript agent:`.
+- [ ] Ask "What is Pipecat?" with `DEEPGRAM_KEYTERMS` empty and note how Deepgram spells
+      it. Set `DEEPGRAM_KEYTERMS=Vonage,Pipecat`, restart, ask again: it's spelled
+      *Pipecat*. Screenshot both panels for the post.
+- [ ] Ask about today's news: the agent says it can't look up current events.
 - [ ] Hold a 3 to 5 minute conversation with several turns; the agent remembers
       earlier turns, never repeats a reply, and never answers its own voice.
 - [ ] Pause mid-sentence ("I'd like to know about... the moon"): the agent waits
       instead of answering the half sentence (Smart Turn).
 - [ ] Talk over a long answer: **it stops** and listens (interruption). The next
-      `Transcript agent:` line holds only the words you heard before you interrupted.
+      *Agent said:* line ends where you interrupted and is marked *(interrupted)*.
 - [ ] **Mute**: the badge shows *Muted*, and the agent doesn't react to you speaking.
       **Unmute**: it hears you again.
 - [ ] The status alternates between *The AI agent is speaking* and *Listening…* / *Your turn*.

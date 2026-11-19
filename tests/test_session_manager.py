@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import pytest
 
@@ -217,4 +218,37 @@ async def test_finished_sessions_are_pruned(settings, monkeypatch):
     await manager.create_session()  # pruning happens on create
     assert manager.get(ids[0]) is None
     assert manager.get(ids[-1]) is not None
+    await manager.shutdown()
+
+
+async def test_transcripts_are_signaled_to_the_session_and_not_kept(settings):
+    video = FakeVideo()
+    manager, _ = make_manager(settings, video=video)
+    created = await manager.create_session()
+    session = created.session
+
+    session.transcript("user", "What is Pipecat?", False)
+    session.transcript("agent", "Pipecat is an open source", True)
+    await wait_until(lambda: len(video.signals) == 2)
+
+    assert [s[:2] for s in video.signals] == [(session.vonage_session_id, "transcript")] * 2
+    assert json.loads(video.signals[1][2]) == {
+        "role": "agent",
+        "text": "Pipecat is an open source",
+        "interrupted": True,
+    }
+    assert session.transcripts.empty()
+    assert "Pipecat" not in json.dumps(session.status(0))
+    await manager.shutdown()
+
+
+async def test_a_failed_signal_does_not_end_the_call(settings):
+    video = FakeVideo()
+    video.fail_signals = True
+    manager, _ = make_manager(settings, video=video)
+    created = await manager.create_session()
+    created.session.transcript("user", "hello", False)
+    await wait_until(lambda: created.session.transcripts.empty())
+    await asyncio.sleep(0.05)
+    assert not created.session.finished
     await manager.shutdown()

@@ -238,3 +238,39 @@ button[aria-pressed="true"] {
 [hidden] {
   display: none !important;
 }
+
+/* --- Transcript: the text between the stages ------------------------------------- */
+
+.transcript h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.transcript ol {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  max-height: 18rem;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.transcript li {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  line-height: 1.45;
+}
+
+.transcript li.heard {
+  border-left: 4px solid var(--ok);
+}
+
+.transcript li.said {
+  border-left: 4px solid var(--accent);
+}
+
+.transcript em {
+  color: var(--muted);
+}

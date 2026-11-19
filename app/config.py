@@ -26,6 +26,7 @@ DEFAULT_OPENAI_MODEL = "gpt-4.1"
 DEFAULT_ELEVENLABS_VOICE_ID = "l7kNoIfnJKPg7779LI2t"
 DEFAULT_ELEVENLABS_MODEL = "eleven_flash_v2_5"
 AGENT_MODES = ("modular", "echo")
+MAX_KEYTERMS = 50
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 
 
@@ -63,6 +64,8 @@ class Settings:
     elevenlabs_api_key: Secret | None = field(repr=False)
     deepgram_model: str = DEFAULT_DEEPGRAM_MODEL
     deepgram_language: str = DEFAULT_DEEPGRAM_LANGUAGE
+    # Words Deepgram should listen for, such as product or people's names.
+    deepgram_keyterms: tuple[str, ...] = ()
     openai_model: str = DEFAULT_OPENAI_MODEL
     elevenlabs_voice_id: str = DEFAULT_ELEVENLABS_VOICE_ID
     elevenlabs_model: str = DEFAULT_ELEVENLABS_MODEL
@@ -160,6 +163,12 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         "use Voice Library voices through the API)",
     )
 
+    keyterms = tuple(term.strip() for term in text("DEEPGRAM_KEYTERMS").split(",") if term.strip())
+    if len(keyterms) > MAX_KEYTERMS:
+        problems.append(f"DEEPGRAM_KEYTERMS can list at most {MAX_KEYTERMS} terms")
+    elif any(len(term) > 100 for term in keyterms):
+        problems.append("Each DEEPGRAM_KEYTERMS term must be 100 characters or fewer")
+
     log_level = text("LOG_LEVEL", "INFO").upper()
     if log_level not in LOG_LEVELS:
         problems.append(f"LOG_LEVEL must be one of {', '.join(LOG_LEVELS)}")
@@ -173,6 +182,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         elevenlabs_api_key=elevenlabs_api_key,
         deepgram_model=text("DEEPGRAM_MODEL") or DEFAULT_DEEPGRAM_MODEL,
         deepgram_language=text("DEEPGRAM_LANGUAGE") or DEFAULT_DEEPGRAM_LANGUAGE,
+        deepgram_keyterms=keyterms,
         openai_model=text("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL,
         elevenlabs_voice_id=text("ELEVENLABS_VOICE_ID") or DEFAULT_ELEVENLABS_VOICE_ID,
         elevenlabs_model=text("ELEVENLABS_MODEL") or DEFAULT_ELEVENLABS_MODEL,

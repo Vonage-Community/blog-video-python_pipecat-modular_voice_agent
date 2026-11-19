@@ -38,6 +38,9 @@ docker compose up --build                    # run the app on http://localhost:8
 - VAD belongs on `LLMUserAggregatorParams`, not on the transport params (Pipecat
   removed the transport field and ignores it silently).
 - `MicrophoneGate` drops audio until `POST /ready`; the greeting is sent once.
+- Transcripts go agent process → pipe → server → Vonage Video signal (`send_signal`,
+  type `transcript`) → browser. The server queues them only until sent. The browser
+  accepts only signals with no `from` connection (sent by the server).
 - `on_pipeline_error` ends the session only for fatal errors or unusable processors,
   and names the stage. Services retry recoverable errors themselves.
 - One agent per OS process (`app/agent_process.py`). Every session has a tracked

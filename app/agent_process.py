@@ -37,7 +37,17 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STOP_TIMEOUT_SECONDS = 5.0
 # Server side: how long after SIGTERM before SIGKILL.
 TERMINATE_GRACE_SECONDS = 5.0
-EVENTS = {"agent_joined", "user_audio_connected", "user_left", "agent_failed", "idle_timeout"}
+EVENTS = {
+    "agent_joined",
+    "user_audio_connected",
+    "user_left",
+    "agent_failed",
+    "idle_timeout",
+    "transcript",
+}
+TRANSCRIPT_ROLES = {"user", "agent"}
+# Vonage Video signals carry at most 8 kB, so very long replies are cut short.
+MAX_TRANSCRIPT_CHARS = 2000
 
 
 class AgentProcessError(Exception):
@@ -138,6 +148,11 @@ class ProcessAgent:
         if event == "agent_failed":
             self._failure_reported = True
             self._events.agent_failed(str(message.get("message", "unknown error")))
+        elif event == "transcript":
+            role, text = message.get("role"), message.get("text")
+            if role in TRANSCRIPT_ROLES and isinstance(text, str):
+                interrupted = message.get("interrupted") is True
+                self._events.transcript(role, text[:MAX_TRANSCRIPT_CHARS], interrupted)
         else:
             getattr(self._events, event)()
 
@@ -184,6 +199,9 @@ class PipeEvents:
 
     def idle_timeout(self) -> None:
         self._emit("idle_timeout")
+
+    def transcript(self, role: str, text: str, interrupted: bool) -> None:
+        self._emit("transcript", role=role, text=text, interrupted=interrupted)
 
 
 AgentBuilder = Callable[[Settings, AgentConnection, AgentEvents], Agent]

@@ -72,6 +72,8 @@ and conversational: one to three sentences unless the user asks for more. Write
 plain sentences only: no lists, markdown, emoji, or symbols that can't be spoken.
 Spell out numbers the way you would say them. You hear the user through a
 speech-to-text service, so if a sentence looks garbled, ask them to repeat it.
+You can't browse the internet or look up today's news, so say so instead of
+guessing about current events.
 If you are not sure about something, say so. If anyone asks, you are an AI
 model, not a human."""
 
@@ -326,6 +328,8 @@ class ModularAgent(VonageAgent):
             settings=DeepgramSTTService.Settings(
                 model=settings.deepgram_model,
                 language=settings.deepgram_language,
+                # Keyterm prompting: boost words Deepgram would otherwise mishear.
+                keyterm=list(settings.deepgram_keyterms) or None,
             ),
         )
 
@@ -357,15 +361,17 @@ class ModularAgent(VonageAgent):
             user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
         )
 
-        if settings.log_transcripts:
+        # The text between the stages: what Deepgram heard, and what the agent said.
+        # Both go to your browser's transcript panel; logging them is optional.
+        @user_aggregator.event_handler("on_user_turn_message_added")
+        async def on_user_message(aggregator: Any, message: Any) -> None:
+            self._send_transcript("user", message.content)
 
-            @user_aggregator.event_handler("on_user_turn_message_added")
-            async def on_user_message(aggregator: Any, message: Any) -> None:
-                logger.info(f"Transcript user: {message.content}")
-
-            @assistant_aggregator.event_handler("on_assistant_turn_stopped")
-            async def on_assistant_message(aggregator: Any, message: Any) -> None:
-                logger.info(f"Transcript agent: {message.content}")
+        @assistant_aggregator.event_handler("on_assistant_turn_stopped")
+        async def on_assistant_message(aggregator: Any, message: Any) -> None:
+            # Built from ElevenLabs' word timestamps, so after an interruption it holds
+            # only the words that played.
+            self._send_transcript("agent", message.content, interrupted=message.interrupted)
 
         pipeline = Pipeline(
             [
@@ -387,6 +393,13 @@ class ModularAgent(VonageAgent):
             # The browser follows the call through Vonage events, not Pipecat's RTVI protocol.
             enable_rtvi=False,
         )
+
+    def _send_transcript(self, role: str, text: str, interrupted: bool = False) -> None:
+        if not text.strip():
+            return
+        if self._settings.log_transcripts:
+            logger.info(f"Transcript {role}: {text}" + (" (interrupted)" if interrupted else ""))
+        self._events.transcript(role, text, interrupted)
 
     async def begin_conversation(self, worker: PipelineWorker) -> None:
         logger.info("Browser is ready: opening the microphone and requesting a greeting")

@@ -18,6 +18,8 @@ class FakeVideo:
     def __init__(self, fail_with: Exception | None = None):
         self.fail_with = fail_with
         self.sessions_created = 0
+        self.signals: list[tuple[str, str, str]] = []
+        self.fail_signals = False
 
     def create_routed_session(self) -> str:
         if self.fail_with:
@@ -27,6 +29,11 @@ class FakeVideo:
 
     def create_token(self, session_id: str, role: str, ttl_seconds: int) -> str:
         return f"token-for-{role}-{session_id}"
+
+    def send_signal(self, session_id: str, signal_type: str, data: str) -> None:
+        if self.fail_signals:
+            raise OSError("signal failed")
+        self.signals.append((session_id, signal_type, data))
 
 
 class FakeAgent:

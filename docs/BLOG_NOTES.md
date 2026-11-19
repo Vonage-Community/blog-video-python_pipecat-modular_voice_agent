@@ -35,6 +35,12 @@ The README's "Architecture" diagram has the full version.
    Unmute; Leave.
 5. `AGENT_MODE=echo` to check Vonage alone.
 
+## The main screenshot
+
+The transcript panel mid-conversation: *Deepgram heard:* and *Agent said:* lines, one
+marked *(interrupted)*. It shows the text between the stages, which a speech-to-speech
+model never exposes.
+
 ## Most educational code excerpts
 
 1. **The pipeline list** in `ModularAgent.build_pipeline`: one line per stage.
@@ -44,6 +50,10 @@ The README's "Architecture" diagram has the full version.
 4. **`MicrophoneGate`** and `begin_conversation`: no audio to Deepgram until the
    browser is ready, then one `LLMRunFrame` for the greeting.
 5. **`failed_stage` and `describe_failure`**: errors that say which provider failed.
+6. **The transcript path:** the aggregator events in `ModularAgent`, the server's
+   `send_signal`, and the browser's `signal:transcript` handler, which ignores signals
+   that didn't come from the server (`event.from`).
+7. **Keyterms:** `DEEPGRAM_KEYTERMS=Vonage,Pipecat`, with before-and-after screenshots.
 
 ## Screenshot and video opportunities
 
@@ -51,7 +61,8 @@ The README's "Architecture" diagram has the full version.
 - The server log with `Transcript user:` and `Transcript agent:` lines
   (`LOG_TRANSCRIPTS=true`), showing each stage's output.
 - The page showing *Text-to-speech (ElevenLabs) failed … Check ELEVENLABS_API_KEY.*
-- Video: change `ELEVENLABS_VOICE_ID`, restart, and hear the new voice.
+- Video: design a voice with ElevenLabs Voice Design, set `ELEVENLABS_VOICE_ID`, restart,
+  and hear it. (Needs a paid ElevenLabs plan.)
 
 ## Links
 

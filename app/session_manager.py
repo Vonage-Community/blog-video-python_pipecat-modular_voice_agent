@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import secrets
 import time
 from collections import deque
@@ -34,6 +35,9 @@ STOP_GRACE_SECONDS = 10.0
 END_WAIT_SECONDS = STOP_GRACE_SECONDS + 15.0
 KEEP_FINISHED_SECONDS = 15 * 60
 MAX_FINISHED_SESSIONS = 20
+# The browser listens for this with session.on("signal:transcript").
+TRANSCRIPT_SIGNAL_TYPE = "transcript"
+TRANSCRIPT_QUEUE_SIZE = 50
 
 
 class SessionState(StrEnum):
@@ -69,6 +73,8 @@ class AgentEvents(Protocol):
 
     def idle_timeout(self) -> None: ...
 
+    def transcript(self, role: str, text: str, interrupted: bool) -> None: ...
+
 
 @dataclass(frozen=True)
 class AgentConnection:
@@ -97,6 +103,8 @@ class VideoService(Protocol):
     def create_routed_session(self) -> str: ...
 
     def create_token(self, session_id: str, role: Any, ttl_seconds: int) -> str: ...
+
+    def send_signal(self, session_id: str, signal_type: str, data: str) -> None: ...
 
 
 class SessionLimitError(Exception):
@@ -131,6 +139,10 @@ class DemoSession:
     supervisor: asyncio.Task[None] | None = field(default=None, repr=False)
     stop_requested: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     timers: list[asyncio.TimerHandle] = field(default_factory=list, repr=False)
+    # Transcript lines waiting to be signaled to the browser. Held only until sent.
+    transcripts: asyncio.Queue[dict[str, Any]] = field(
+        default_factory=lambda: asyncio.Queue(maxsize=TRANSCRIPT_QUEUE_SIZE), repr=False
+    )
 
     @property
     def finished(self) -> bool:
@@ -168,6 +180,12 @@ class DemoSession:
 
     def idle_timeout(self) -> None:
         self.request_end(EndReason.IDLE_TIMEOUT)
+
+    def transcript(self, role: str, text: str, interrupted: bool) -> None:
+        if self.finished:
+            return
+        with contextlib.suppress(asyncio.QueueFull):  # the browser is far behind; drop it
+            self.transcripts.put_nowait({"role": role, "text": text, "interrupted": interrupted})
 
     # --- Public view -----------------------------------------------------------
 
@@ -335,6 +353,9 @@ class SessionManager:
         agent = session.agent
         run_task = asyncio.create_task(agent.run(), name=f"agent-{session.id}")
         stop_task = asyncio.create_task(session.stop_requested.wait(), name=f"stop-{session.id}")
+        signal_task = asyncio.create_task(
+            self._signal_transcripts(session), name=f"transcripts-{session.id}"
+        )
         try:
             await asyncio.wait({run_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
             if not run_task.done():
@@ -350,12 +371,31 @@ class SessionManager:
                     await asyncio.gather(run_task, return_exceptions=True)
         finally:
             # Also reached if this supervisor itself is cancelled.
-            for task in (run_task, stop_task):
+            for task in (run_task, stop_task, signal_task):
                 task.cancel()
-            await asyncio.gather(run_task, stop_task, return_exceptions=True)
+            await asyncio.gather(run_task, stop_task, signal_task, return_exceptions=True)
             for timer in session.timers:
                 timer.cancel()
             self._record_outcome(session, run_task)
+
+    async def _signal_transcripts(self, session: DemoSession) -> None:
+        """Send each transcript line to the browser as a Vonage Video signal.
+
+        Signals travel through the Vonage session, like the agent's audio. Nothing is
+        stored: each line is dropped once it's sent. A failed signal only costs that
+        line, never the call.
+        """
+        while True:
+            line = await session.transcripts.get()
+            try:
+                await self._run_blocking(
+                    self._video.send_signal,
+                    session.vonage_session_id,
+                    TRANSCRIPT_SIGNAL_TYPE,
+                    json.dumps(line),
+                )
+            except Exception as exc:
+                logger.warning(f"Session {session.id}: transcript signal failed: {exc}")
 
     def _record_outcome(self, session: DemoSession, run_task: asyncio.Task[None]) -> None:
         exc = None if run_task.cancelled() else run_task.exception()

@@ -19,6 +19,9 @@ pipeline.
   and runs three services in a row: **Deepgram** speech-to-text, an **OpenAI** text
   model, and **ElevenLabs** text-to-speech. The spoken reply is published back into
   the session.
+- A **transcript panel** shows the text between the stages as you talk: what
+  Deepgram heard you say, and what the agent said. It reaches the page as Vonage
+  Video signals, and nothing is stored.
 - You hear the agent **through your Vonage subscription**, not through a direct
   connection to any provider. Talk over it to interrupt; mute, leave, or let it time
   out, and the agent leaves the call and closes all three provider connections.
@@ -31,9 +34,10 @@ video. Your camera is optional.
 A speech-to-speech model is the quickest way to get an agent talking, but it ties
 listening, thinking, and the voice to one provider. Splitting them gives you
 independent control: pick any ElevenLabs voice, use your own prompt and OpenAI model,
-or change Deepgram's language, each with one line in `.env`. When something goes
-wrong, the error names the stage that failed, and with `LOG_TRANSCRIPTS=true` you can
-read exactly what the agent heard. That control matters once the agent needs a
+or teach Deepgram the words it should listen for, each with one line in `.env`.
+Because the stages pass plain text to each other, the page can show you exactly what
+the agent heard and said, and when something goes wrong, the error names the stage
+that failed. That control matters once the agent needs a
 specific character and voice.
 
 ## Architecture
@@ -172,13 +176,22 @@ something, and talk over it to interrupt. Click **Leave** when you're done.
 
 Stop the server with `Ctrl-C` (or `docker compose down`).
 
-## Change the voice, the prompt, or the model
+## Change the voice, the prompt, the model, or the vocabulary
 
 Each stage is configured on its own:
 
+- **Vocabulary:** Deepgram may hear "Pipecat" as "pipe cat". List the words it should
+  listen for in `DEEPGRAM_KEYTERMS` (for example `DEEPGRAM_KEYTERMS=Vonage,Pipecat`),
+  restart, and watch the transcript panel spell them correctly. This is Deepgram's
+  [keyterm prompting](https://developers.deepgram.com/docs/keyterm): it works with
+  Nova-3 models and is billed as a small per-minute add-on.
+
 - **Voice:** set `ELEVENLABS_VOICE_ID` to any voice ID from the ElevenLabs
   [Voice Library](https://elevenlabs.io/app/voice-library) (add it to My Voices, then
-  copy its ID). The default is *Eddie - Natural and Helpful*. Use a voice you're
+  copy its ID), or design a new one with
+  [Voice Design](https://elevenlabs.io/docs/eleven-creative/voices/voice-design) by
+  describing it in a sentence. The default is *Eddie - Natural and Helpful*. The
+  ElevenLabs dashboard's own voice and model settings don't affect this app. Use a voice you're
   licensed to use; don't clone a real person's voice without their permission.
 - **Model:** set `OPENAI_MODEL` to another OpenAI chat model your key can use. Voice
   needs fast first tokens, so prefer models without long reasoning.
@@ -199,6 +212,7 @@ All settings live in `.env` ([`.env.example`](.env.example) documents each one).
 | `DEEPGRAM_API_KEY` | (required for `modular` mode) | Deepgram API key. |
 | `DEEPGRAM_MODEL` | `nova-3-general` | Deepgram streaming model. |
 | `DEEPGRAM_LANGUAGE` | `en` | Language code for transcription. |
+| `DEEPGRAM_KEYTERMS` | (empty) | Comma-separated words Deepgram should listen for (up to 50). |
 | `OPENAI_API_KEY` | (required for `modular` mode) | OpenAI API key. |
 | `OPENAI_MODEL` | `gpt-4.1` | OpenAI chat model that writes the replies. |
 | `ELEVENLABS_API_KEY` | (required for `modular` mode) | ElevenLabs API key (paid plan). |
@@ -211,7 +225,7 @@ All settings live in `.env` ([`.env.example`](.env.example) documents each one).
 | `READY_TIMEOUT_SECONDS` | `60` | Ends a session if the browser never becomes ready to play the agent. |
 | `SESSION_CREATES_PER_MINUTE` | `6` | Rate limit on starting sessions. |
 | `LOG_LEVEL` | `INFO` | `DEBUG` also enables the native connector's own, unredacted logs. |
-| `LOG_TRANSCRIPTS` | `false` | Log what both sides say. Nothing is stored either way. |
+| `LOG_TRANSCRIPTS` | `false` | Also write what both sides say to the server logs. The page always shows it; nothing is stored. |
 | `PORT` | `8000` | Port on `127.0.0.1` where the page is served. |
 
 ## How to verify it works
@@ -244,6 +258,8 @@ Smoke test:
 - [ ] You hear one greeting, once, without speaking first.
 - [ ] The agent answers a question, and stops when you talk over it.
 - [ ] A conversation of several turns stays on topic (the agent remembers context).
+- [ ] The transcript panel shows a *Deepgram heard:* line for each thing you say and
+      an *Agent said:* line for each reply.
 - [ ] **Mute** stops it from hearing you; **Unmute** restores it.
 - [ ] **Leave** returns you to the start screen, and the logs show `ended (left)`.
 - [ ] Closing the tab mid-call also ends the session within a few seconds.
@@ -274,7 +290,9 @@ When a provider fails, the page names the stage, for example
 | **Speech-to-text (Deepgram) failed** | Check `DEEPGRAM_API_KEY`, your Deepgram balance, and that `DEEPGRAM_MODEL` supports `DEEPGRAM_LANGUAGE`. |
 | **LLM (OpenAI) failed** | Check `OPENAI_API_KEY`, API billing (ChatGPT plans don't include API usage), and that your key can use `OPENAI_MODEL`. |
 | **Text-to-speech (ElevenLabs) failed** with a plan or permission error | Voice Library voices need a paid ElevenLabs plan through the API. Check `ELEVENLABS_VOICE_ID` too. |
-| The agent greets you but never answers | Run with `LOG_TRANSCRIPTS=true`. No `Transcript user:` lines means Deepgram isn't hearing you: check mute, your mic, and the **Can hear you** badge. |
+| The agent greets you but never answers | No *Deepgram heard:* lines in the transcript panel means Deepgram isn't hearing you: check mute, your mic, and the **Can hear you** badge. |
+| The voice isn't the one you picked in the ElevenLabs dashboard | The dashboard's voice and model only apply to its own playground. This app uses `ELEVENLABS_VOICE_ID` and `ELEVENLABS_MODEL` from `.env`. |
+| `Error adding Ice Candidate: The remote description was null` in the logs | Logged by the native connector while the agent connects. Harmless if the call works. |
 | `ModuleNotFoundError: vonage_video_connector` | You ran the agent outside Docker on macOS or Windows. The connector ships Linux wheels only; use `docker compose up`. |
 | **Microphone access is blocked** | Allow the microphone in the browser's site settings. Use `http://localhost:8000`, not a LAN IP (that needs HTTPS). |
 | **Your browser blocked audio playback** | Click **Enable audio**. Browsers block autoplay until you interact with the page. |
@@ -300,8 +318,9 @@ beep and your echo, Vonage works end to end.
   Deepgram bills streaming audio time, OpenAI bills text tokens, and ElevenLabs bills
   characters spoken. The defaults cap a session at 10 minutes, 2 minutes of silence,
   and one session at a time. No audio goes to Deepgram until the browser is ready.
-- **Nothing is recorded.** The app stores no audio, video, or transcripts. Logs omit
-  what you say unless you set `LOG_TRANSCRIPTS=true`.
+- **Nothing is recorded.** The app stores no audio, video, or transcripts. The
+  transcript panel lives only in your open page, and logs omit what you say unless
+  you set `LOG_TRANSCRIPTS=true`.
 - **The agent only listens.** It doesn't see your camera, and it has no avatar.
 - **One room per session.** Each session holds your browser and one agent; other
   streams are ignored by the page.

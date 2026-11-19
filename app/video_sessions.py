@@ -19,6 +19,7 @@ from vonage_http_client.errors import (
     RateLimitedError,
 )
 from vonage_video import MediaMode, SessionOptions, TokenOptions, TokenRole
+from vonage_video.models.signal import SignalData
 
 ParticipantRole = Literal["user", "agent"]
 
@@ -77,3 +78,7 @@ class VonageVideo:
             )
         )
         return token.decode()
+
+    def send_signal(self, session_id: str, signal_type: str, data: str) -> None:
+        """Send a signal to every participant in the session (the browser listens)."""
+        self._client.video.send_signal(session_id, SignalData(type=signal_type, data=data))

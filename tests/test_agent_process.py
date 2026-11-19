@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import signal
 import sys
 from pathlib import Path
@@ -10,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from app import agent_process
-from app.agent_process import AgentProcessError, ProcessAgent
+from app.agent_process import MAX_TRANSCRIPT_CHARS, AgentProcessError, ProcessAgent
 from app.session_manager import AgentConnection
 from tests.fakes import wait_until
 
@@ -22,6 +23,7 @@ class RecordedEvents:
     def __init__(self) -> None:
         self.names: list[str] = []
         self.failures: list[str] = []
+        self.transcripts: list[tuple[str, str, bool]] = []
 
     def agent_joined(self) -> None:
         self.names.append("agent_joined")
@@ -37,6 +39,10 @@ class RecordedEvents:
 
     def agent_failed(self, message: str) -> None:
         self.failures.append(message)
+
+    def transcript(self, role: str, text: str, interrupted: bool) -> None:
+        self.names.append("transcript")
+        self.transcripts.append((role, text, interrupted))
 
 
 @pytest.fixture
@@ -160,6 +166,22 @@ def test_malformed_and_unknown_events_are_ignored(settings):
     agent._dispatch(b'{"no_event": true}\n')
     agent._dispatch(b'{"event": "agent_joined"}\n')
     assert events.names == ["agent_joined"]
+
+
+def test_transcripts_are_validated_and_capped(settings):
+    events = RecordedEvents()
+    agent = make_agent(settings, events)
+    agent._dispatch(b'{"event": "transcript", "role": "user", "text": "hello"}\n')
+    agent._dispatch(
+        b'{"event": "transcript", "role": "agent", "text": "hi", "interrupted": true}\n'
+    )
+    agent._dispatch(b'{"event": "transcript", "role": "system", "text": "nope"}\n')
+    agent._dispatch(b'{"event": "transcript", "role": "user", "text": 42}\n')
+    long_line = json.dumps({"event": "transcript", "role": "agent", "text": "a" * 5000})
+    agent._dispatch(long_line.encode())
+    transcripts = events.transcripts
+    assert transcripts[:2] == [("user", "hello", False), ("agent", "hi", True)]
+    assert len(transcripts) == 3 and len(transcripts[2][1]) == MAX_TRANSCRIPT_CHARS
 
 
 def test_token_is_not_passed_on_the_command_line(settings):

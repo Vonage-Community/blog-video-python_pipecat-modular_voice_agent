@@ -60,6 +60,13 @@ the real classes:
 - `LLMContextAggregatorPair(context, user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()))`.
   With no `user_turn_strategies`, turns start on VAD or a transcript and stop when
   `LocalSmartTurnAnalyzerV3` says the sentence is complete.
+- `DeepgramSTTService.Settings(keyterm=[...])`, sent as repeated `keyterm` query
+  parameters; Nova-3 only.
+- Aggregator events `on_user_turn_message_added` (`message.content`) and
+  `on_assistant_turn_stopped` (`message.content`, `message.interrupted`).
+- `vonage` 4.10.0: `video.send_signal(session_id, SignalData(type, data))`, which
+  signals every connection in the session. Signal data is capped at 8 kB, so lines are
+  cut to 2,000 characters.
 - `ErrorFrame.processor`, `.category` (`ErrorCategory`), `.fatal`, and
   `FrameProcessor.is_usable`, used to name the failed stage and to decide whether to
   end the session.

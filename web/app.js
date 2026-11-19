@@ -6,6 +6,8 @@
 // 4. Subscribe to the AI agent's stream, recognised by the role in its
 //    connection data, and to nothing else.
 // 5. Once its audio can play, tell the server so the agent greets you once.
+// 6. Show the transcript signals the server sends: what Deepgram heard, and what
+//    the agent said.
 'use strict';
 
 const $ = (id) => document.getElementById(id);
@@ -26,6 +28,8 @@ const ui = {
   camera: $('camera'),
   leave: $('leave'),
   timeLeft: $('time-left'),
+  transcript: $('transcript'),
+  transcriptLines: $('transcript-lines'),
   status: $('status'),
   error: $('error'),
 };
@@ -205,6 +209,7 @@ function joinSession({ applicationId, vonageSessionId, token }) {
         setStatus('The AI agent left the call.');
       }
     },
+    'signal:transcript': onTranscript,
     sessionReconnecting: () => setStatus('Network hiccup: reconnecting to Vonage Video…'),
     sessionReconnected: () => setStatus('Reconnected.'),
     sessionDisconnected: (event) => {
@@ -229,6 +234,32 @@ function joinSession({ applicationId, vonageSessionId, token }) {
       );
     });
   });
+}
+
+// The server sends one signal per turn. Only accept signals from the server
+// (event.from is null), not ones another participant could send.
+function onTranscript(event) {
+  if (event.from) return;
+  let line;
+  try {
+    line = JSON.parse(event.data);
+  } catch {
+    return;
+  }
+  if (typeof line?.text !== 'string') return;
+  const item = document.createElement('li');
+  item.className = line.role === 'user' ? 'heard' : 'said';
+  const label = document.createElement('strong');
+  label.textContent = line.role === 'user' ? 'Deepgram heard: ' : 'Agent said: ';
+  item.append(label, document.createTextNode(line.text));
+  if (line.interrupted) {
+    const note = document.createElement('em');
+    note.textContent = ' (interrupted: only the words you heard)';
+    item.append(note);
+  }
+  ui.transcriptLines.append(item);
+  ui.transcript.hidden = false;
+  item.scrollIntoView({ block: 'nearest' });
 }
 
 function onStreamCreated(stream) {
@@ -384,6 +415,8 @@ async function start() {
   };
   youLevel.reset();
   agentLevel.reset();
+  ui.transcriptLines.replaceChildren();
+  ui.transcript.hidden = true;
 
   try {
     setStatus('Asking for microphone access…');
