@@ -40,6 +40,7 @@ from pipecat.frames.frames import (
     LLMRunFrame,
     OutputAudioRawFrame,
 )
+from pipecat.observers.user_bot_latency_observer import UserBotLatencyObserver
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker, ProcessorUnusablePolicy
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -373,6 +374,13 @@ class ModularAgent(VonageAgent):
             # only the words that played.
             self._send_transcript("agent", message.content, interrupted=message.interrupted)
 
+        # Logs, for each reply, how long you waited and which stage the time went to.
+        latency = UserBotLatencyObserver()
+
+        @latency.event_handler("on_latency_breakdown")
+        async def on_latency_breakdown(observer: Any, breakdown: Any) -> None:
+            logger.info("Latency: " + " | ".join(breakdown.turn_contribution_lines()))
+
         pipeline = Pipeline(
             [
                 transport.input(),
@@ -388,6 +396,7 @@ class ModularAgent(VonageAgent):
         return PipelineWorker(
             pipeline,
             params=PipelineParams(enable_metrics=True, enable_usage_metrics=True),
+            observers=[latency],
             idle_timeout_secs=settings.idle_timeout_seconds,
             processor_unusable_policy=ProcessorUnusablePolicy.END,
             # The browser follows the call through Vonage events, not Pipecat's RTVI protocol.
