@@ -1,0 +1,52 @@
+.env.example
+  h_d5be481ddf6211 15-18,50
+CHANGELOG.md
+  h_d5be481ddf6211 20-23
+CLAUDE.md
+  h_d5be481ddf6211 41-43
+README.md
+  h_d5be481ddf6211 22-24,37-40,179,183-188,191-194,215,228,261-262,293-295,321-323
+app/agent_process.py
+  h_d5be481ddf6211 40-50,151-155,203-205
+app/config.py
+  h_d5be481ddf6211 29,67-68,166-171,185
+app/modular_agent.py
+  h_d5be481ddf6211 75-76,331-332,364-368,370-374,397-403
+app/session_manager.py
+  h_d5be481ddf6211 18,38-40,76-77,107-108,142-145,184-189,356-358,374,376,381-399
+app/video_sessions.py
+  h_d5be481ddf6211 22,81-84
+docs/BLOG_NOTES.md
+  h_d5be481ddf6211 38-43,53-56,64-65
+docs/DEPENDENCIES.md
+  h_d5be481ddf6211 63-69
+docs/MANUAL_TEST.md
+  h_d5be481ddf6211 63-69,75
+tests/fakes.py
+  h_d5be481ddf6211 21-22,33-37
+tests/test_agent_process.py
+  h_d5be481ddf6211 6,14,26,43-46,171-186
+tests/test_config.py
+  h_d5be481ddf6211 33,201-210
+tests/test_modular_agent.py
+  h_d5be481ddf6211 96,107,186-200
+tests/test_session_manager.py
+  h_d5be481ddf6211 4,222-254
+web/app.js
+  h_d5be481ddf6211 9-10,31-32,212,239-264,418-419
+web/index.html
+  h_d5be481ddf6211 84-92
+web/styles.css
+  h_d5be481ddf6211 241-276
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "06f4ea6721d7212fd3cd75511d4f8de996ea8fc6",
+  "prompts": {},
+  "humans": {
+    "h_d5be481ddf6211": {
+      "author": "Benjamin Aronov <benjamin@benyas.com>"
+    }
+  }
+}
