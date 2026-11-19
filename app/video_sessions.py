@@ -31,10 +31,14 @@ class VideoApiError(Exception):
 class VonageVideo:
     def __init__(self, application_id: str, private_key: str, timeout_seconds: int = 10):
         self.application_id = application_id
-        self._client = Vonage(
-            Auth(application_id=application_id, private_key=private_key),
-            HttpClientOptions(timeout=timeout_seconds),
-        )
+        auth = Auth(application_id=application_id, private_key=private_key)
+        options = HttpClientOptions(timeout=timeout_seconds)
+        self._client = Vonage(auth, options)
+        # A separate client for signals. At the time of writing, the SDK keeps the
+        # Content-Type header from a JSON request (like a signal) on its shared headers,
+        # and every later session creation then fails with HTTP 415
+        # (https://github.com/Vonage/vonage-python-sdk/issues/323).
+        self._signal_client = Vonage(auth, options)
 
     def create_routed_session(self) -> str:
         """Create a session that uses the Vonage Media Router.
@@ -81,4 +85,4 @@ class VonageVideo:
 
     def send_signal(self, session_id: str, signal_type: str, data: str) -> None:
         """Send a signal to every participant in the session (the browser listens)."""
-        self._client.video.send_signal(session_id, SignalData(type=signal_type, data=data))
+        self._signal_client.video.send_signal(session_id, SignalData(type=signal_type, data=data))
