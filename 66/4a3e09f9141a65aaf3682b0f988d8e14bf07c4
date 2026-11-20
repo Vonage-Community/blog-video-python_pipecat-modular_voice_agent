@@ -1,0 +1,18 @@
+web/app.js
+  h_d5be481ddf6211 123-126,141
+web/index.html
+  h_d5be481ddf6211 17,29,35,44,50,57,71,75,77,90,93,158,160-162,164-177
+web/styles.css
+  h_d5be481ddf6211 75-78,80-81,85-110,355,357,368,370,377-378,382-383,387-389,539-543,546-547
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "664a3e09f9141a65aaf3682b0f988d8e14bf07c4",
+  "prompts": {},
+  "humans": {
+    "h_d5be481ddf6211": {
+      "author": "Benjamin Aronov <benjamin@benyas.com>"
+    }
+  }
+}
