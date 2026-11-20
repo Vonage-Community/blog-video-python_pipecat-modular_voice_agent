@@ -72,17 +72,42 @@ footer {
   color: var(--muted);
 }
 
+.subtitle {
+  margin: 0;
+}
+
 footer {
-  font-size: 0.875rem;
-  margin-top: 32px;
+  font-size: 0.8rem;
+  margin-top: 16px;
 }
 
 .disclosure {
-  background: var(--notice-bg);
-  border: 1px solid var(--notice-border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  margin: 16px 0;
+  border-left: 3px solid var(--notice-border);
+  padding: 2px 0 2px 12px;
+  margin: 20px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.disclosure p {
+  margin: 0;
+}
+
+.disclosure strong {
+  color: var(--text);
+}
+
+.disclosure details {
+  margin-top: 4px;
+}
+
+.disclosure summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.disclosure details p {
+  margin-top: 4px;
 }
 
 .panel {
@@ -326,11 +351,10 @@ button[aria-pressed="true"] {
   margin: 0;
   min-width: 0;
   border: 1px solid var(--border);
-  border-top: 4px solid var(--stage);
   border-radius: 10px;
-  padding: 12px 14px 10px;
+  padding: 10px 14px 14px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   align-content: start;
 }
 
@@ -341,30 +365,28 @@ button[aria-pressed="true"] {
 
 .stage legend {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
-  padding: 0 4px;
+  padding: 0 6px;
   font-weight: 700;
 }
 
 .stage .step {
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--stage);
   color: #fff;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  align-self: center;
 }
 
 .stage .provider {
-  font-weight: 600;
-  font-size: 0.75rem;
-  color: var(--stage);
-  border: 1px solid var(--stage);
-  border-radius: 999px;
-  padding: 0 8px;
+  font-weight: 500;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .field {
@@ -514,12 +536,15 @@ input[type="range"] {
 
 .setup-foot {
   margin-top: 16px;
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.setup-foot .hint {
-  margin: 0;
+.setup-foot .checkbox small {
+  color: var(--muted);
 }
 
 .actions {

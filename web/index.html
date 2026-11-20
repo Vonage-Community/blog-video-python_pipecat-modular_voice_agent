@@ -14,28 +14,11 @@
       <header>
         <h1>Talk to an AI voice agent in a Vonage Video call</h1>
         <p class="subtitle">
-          Your browser and a Pipecat agent join the same Vonage Video session. Deepgram
-          transcribes you, OpenAI writes the reply, and ElevenLabs speaks it.
+          Choose how it listens, thinks, speaks, and takes turns. Then start the call.
         </p>
       </header>
 
-      <aside class="disclosure" aria-label="AI disclosure">
-        <strong>You are talking to an AI, not a person.</strong>
-        Its answers and its voice are AI-generated, and the answers can be wrong. Your
-        microphone audio travels through Vonage Video to Deepgram, and the text of the
-        conversation goes to OpenAI and ElevenLabs, for the length of the call. This demo
-        does not record or store anything.
-      </aside>
-
       <section id="setup" class="panel">
-        <div class="setup-head">
-          <h2>Build your agent, one stage at a time</h2>
-          <p class="hint">
-            A speech-to-speech model makes these choices for you. Here each stage is its own
-            service, so you choose how the agent listens, thinks, speaks, and takes turns.
-          </p>
-        </div>
-
         <p id="echo-note" class="hint" hidden>
           Echo mode (<code>AGENT_MODE=echo</code>): the agent beeps, then repeats your
           microphone. No AI providers, so there is nothing to choose.
@@ -43,37 +26,35 @@
 
         <div id="stages" class="stages">
           <fieldset class="stage listen">
-            <legend><span class="step">1</span>Listen <span class="provider">Deepgram</span></legend>
+            <legend><span class="step">1</span>Listen<span class="provider">Deepgram</span></legend>
             <label class="field">
               <span>Language</span>
               <select id="opt-language"></select>
             </label>
             <div class="field">
-              <label for="keyterm-input">Words to listen for</label>
+              <label for="keyterm-input" title="Names Deepgram might mishear, like Pipecat or your surname">Words to listen for</label>
               <div class="tags" id="keyterm-tags">
                 <input id="keyterm-input" type="text" autocomplete="off"
                   placeholder="Type a word, then Enter" />
               </div>
             </div>
-            <p class="why">Names Deepgram might mishear, like "Pipecat" or your surname.</p>
           </fieldset>
 
           <fieldset class="stage think">
-            <legend><span class="step">2</span>Think <span class="provider">OpenAI</span></legend>
+            <legend><span class="step">2</span>Think<span class="provider">OpenAI</span></legend>
             <label class="field">
               <span>Model</span>
               <select id="opt-model"></select>
             </label>
             <label class="field">
-              <span>Extra instructions <small id="instructions-count"></small></span>
+              <span title="Added after the built-in rules: short spoken replies, and it's an AI">Extra instructions <small id="instructions-count"></small></span>
               <textarea id="opt-instructions" rows="3"
                 placeholder="For example: Answer like a patient science teacher."></textarea>
             </label>
-            <p class="why">Added after the built-in rules: short spoken replies, and it's an AI.</p>
           </fieldset>
 
           <fieldset class="stage speak">
-            <legend><span class="step">3</span>Speak <span class="provider">ElevenLabs</span></legend>
+            <legend><span class="step">3</span>Speak<span class="provider">ElevenLabs</span></legend>
             <label class="field">
               <span>Voice</span>
               <select id="opt-voice"></select>
@@ -87,32 +68,30 @@
               <span>Speed <output id="speed-value">1.0×</output></span>
               <input id="opt-speed" type="range" min="0.7" max="1.2" step="0.05" value="1" />
             </label>
-            <p class="why" id="voices-note">Any ElevenLabs voice, including ones you design.</p>
+            <p class="why" id="voices-note" hidden></p>
           </fieldset>
 
           <fieldset class="stage turns">
-            <legend><span class="step">4</span>Take turns <span class="provider">Pipecat</span></legend>
+            <legend><span class="step">4</span>Take turns<span class="provider">Pipecat</span></legend>
             <div class="field">
-              <span id="pause-label">Pause before replying</span>
+              <span id="pause-label" title="Longer pauses cut you off less often, and reply more slowly">Pause before replying</span>
               <div class="segmented" role="radiogroup" aria-labelledby="pause-label" id="opt-pause"></div>
             </div>
             <label class="field">
               <span>Words needed to interrupt <output id="words-value">3</output></span>
               <input id="opt-words" type="range" min="1" max="5" step="1" value="3" />
             </label>
-            <p class="why">Longer pauses cut you off less often, and reply more slowly.</p>
           </fieldset>
         </div>
 
         <div class="setup-foot">
           <label class="checkbox">
             <input type="checkbox" id="use-camera" />
-            Turn on my camera too (optional; the agent only listens)
+            Camera on <small>(optional, the agent only listens)</small>
           </label>
-          <p class="hint">Use headphones if you can, so the agent doesn't hear itself.</p>
           <div class="actions">
+            <button id="reset-options" class="link" type="button">Reset</button>
             <button id="start" class="primary" type="button">Start conversation</button>
-            <button id="reset-options" class="link" type="button">Reset to defaults</button>
           </div>
         </div>
       </section>
@@ -176,12 +155,26 @@
       <p id="status" class="status" role="status" aria-live="polite">Ready when you are.</p>
       <div id="error" class="error" role="alert" hidden></div>
 
-      <footer>
+      <aside class="disclosure" aria-label="AI disclosure">
         <p>
-          Built with the Vonage Video API, Pipecat, Deepgram, OpenAI, and ElevenLabs. The
-          agent's audio reaches you through the Vonage Video session, never directly from
-          a provider.
+          <strong>You'll be talking to an AI, not a person.</strong> Its answers and voice
+          are AI-generated, and the answers can be wrong. Nothing is recorded. Use headphones
+          if you can, so the agent doesn't hear itself.
         </p>
+        <details>
+          <summary>Where your audio goes</summary>
+          <p>
+            Your microphone audio travels through Vonage Video to the agent and on to
+            Deepgram. The text of the conversation goes to OpenAI, and the agent's replies
+            to ElevenLabs, for the length of the call. The agent's voice reaches you
+            through the Vonage Video session, never directly from a provider. Nothing is
+            stored after the call.
+          </p>
+        </details>
+      </aside>
+
+      <footer>
+        <p>Built with the Vonage Video API, Pipecat, Deepgram, OpenAI, and ElevenLabs.</p>
       </footer>
     </main>
   </body>

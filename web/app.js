@@ -120,8 +120,10 @@ function fillVoices({ recommended, yours, yoursStatus }) {
   const group = (label, voices) => {
     const optgroup = Object.assign(document.createElement('optgroup'), { label });
     for (const v of voices) {
-      const text = v.description ? `${v.name} (${v.description})` : v.name;
-      optgroup.append(Object.assign(document.createElement('option'), { value: v.id, text }));
+      // Keep the dropdown short; the accent and gender show on hover.
+      optgroup.append(
+        Object.assign(document.createElement('option'), { value: v.id, text: v.name, title: v.description }),
+      );
     }
     return optgroup;
   };
@@ -136,6 +138,7 @@ function fillVoices({ recommended, yours, yoursStatus }) {
   if (yoursStatus === 'missing_permission') {
     ui.voicesNote.textContent =
       'To list your own ElevenLabs voices here, give the API key the Voices: Read permission.';
+    ui.voicesNote.hidden = false;
   }
 }
 
