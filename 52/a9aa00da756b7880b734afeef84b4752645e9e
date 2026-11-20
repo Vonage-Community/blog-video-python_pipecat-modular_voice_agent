@@ -1,0 +1,20 @@
+app/call_options.py
+  s_a0da3f42c89dbd::t_e4ced92e35e97f 1-244
+  s_a0da3f42c89dbd::t_394f358e75d8e2 245-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "52a9aa00da756b7880b734afeef84b4752645e9e",
+  "prompts": {},
+  "sessions": {
+    "s_a0da3f42c89dbd": {
+      "agent_id": {
+        "tool": "kiro",
+        "id": "sess_9a50d16a-a138-48c3-bfca-75a92cd4df5e",
+        "model": "auto"
+      },
+      "human_author": "Benjamin Aronov <benjamin@benyas.com>"
+    }
+  }
+}
