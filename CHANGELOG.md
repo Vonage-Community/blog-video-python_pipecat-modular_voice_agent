@@ -20,6 +20,10 @@ Not tagged yet: waiting for the live manual test (`docs/MANUAL_TEST.md`).
 - A transcript panel showing what Deepgram heard and what the agent said, delivered
   as Vonage Video signals from the server and never stored.
 - `DEEPGRAM_KEYTERMS` for Deepgram keyterm prompting.
+- A waiting room with one card per stage: language and keyterms, OpenAI model and extra
+  instructions, ElevenLabs voice and speed, and turn-taking. Checked server-side; the
+  voice list includes your account's voices when the key has Voices: Read.
+- A timing line per reply in the transcript panel, by stage.
 - Short replies ("okay") no longer interrupt the agent: three words are needed while
   it talks (`MinWordsUserTurnStartStrategy`).
 - A `Latency:` log line per reply, from Pipecat's `UserBotLatencyObserver`.

@@ -29,6 +29,7 @@ from typing import IO, Any, NoReturn
 
 from loguru import logger
 
+from app.call_options import CallOptions
 from app.config import ConfigError, Settings, load_settings, setup_logging
 from app.session_manager import Agent, AgentConnection, AgentEvents
 
@@ -44,6 +45,7 @@ EVENTS = {
     "agent_failed",
     "idle_timeout",
     "transcript",
+    "latency",
 }
 TRANSCRIPT_ROLES = {"user", "agent"}
 # Vonage Video signals carry at most 8 kB, so very long replies are cut short.
@@ -64,10 +66,12 @@ class ProcessAgent:
         events: AgentEvents,
         label: str = "agent",
         command: list[str] | None = None,
+        options: CallOptions | None = None,
     ):
         self._connection = connection
         self._events = events
         self._label = label
+        self._options = options
         self._command = command or [sys.executable, "-m", "app.agent_process"]
         self._process: asyncio.subprocess.Process | None = None
         self._start_requested = False
@@ -93,6 +97,7 @@ class ProcessAgent:
                     "sessionId": self._connection.session_id,
                     "token": self._connection.token,
                     "label": self._label,
+                    "options": self._options.to_json() if self._options else None,
                 }
             )
             if self._start_requested:
@@ -148,6 +153,15 @@ class ProcessAgent:
         if event == "agent_failed":
             self._failure_reported = True
             self._events.agent_failed(str(message.get("message", "unknown error")))
+        elif event == "latency":
+            stages, total = message.get("stages"), message.get("total")
+            if isinstance(stages, list) and isinstance(total, int | float):
+                clean = [
+                    {"stage": str(s["stage"])[:40], "secs": round(float(s["secs"]), 3)}
+                    for s in stages[:10]
+                    if isinstance(s, dict) and isinstance(s.get("secs"), int | float)
+                ]
+                self._events.latency(clean, round(float(total), 3))
         elif event == "transcript":
             role, text = message.get("role"), message.get("text")
             if role in TRANSCRIPT_ROLES and isinstance(text, str):
@@ -203,6 +217,9 @@ class PipeEvents:
     def transcript(self, role: str, text: str, interrupted: bool) -> None:
         self._emit("transcript", role=role, text=text, interrupted=interrupted)
 
+    def latency(self, stages: list[dict[str, Any]], total: float) -> None:
+        self._emit("latency", stages=stages, total=total)
+
 
 AgentBuilder = Callable[[Settings, AgentConnection, AgentEvents], Agent]
 
@@ -224,6 +241,7 @@ async def serve(build_agent: AgentBuilder, events_out: IO[str]) -> int:
         first = json.loads(await reader.readline())
         connection = AgentConnection(first["applicationId"], first["sessionId"], first["token"])
         label = str(first.get("label", "agent"))
+        options = CallOptions.from_json(first["options"]) if first.get("options") else None
     except (ValueError, KeyError, TypeError):
         events.agent_failed("Agent process received no valid connection details")
         return 2
@@ -233,6 +251,8 @@ async def serve(build_agent: AgentBuilder, events_out: IO[str]) -> int:
     except ConfigError as exc:
         events.agent_failed("Configuration error: " + "; ".join(exc.problems))
         return 2
+    if options is not None:
+        settings = options.apply_to(settings)
     setup_logging(settings.log_level, label=label)
     logger.info(f"Agent process {os.getpid()} starting")
 

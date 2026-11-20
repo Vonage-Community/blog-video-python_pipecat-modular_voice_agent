@@ -27,6 +27,7 @@ from typing import Any, Protocol
 
 from loguru import logger
 
+from app.call_options import CallOptions
 from app.config import Settings, redact
 
 STOP_GRACE_SECONDS = 10.0
@@ -35,9 +36,11 @@ STOP_GRACE_SECONDS = 10.0
 END_WAIT_SECONDS = STOP_GRACE_SECONDS + 15.0
 KEEP_FINISHED_SECONDS = 15 * 60
 MAX_FINISHED_SESSIONS = 20
-# The browser listens for this with session.on("signal:transcript").
+# The browser listens for these with session.on("signal:transcript") and
+# session.on("signal:latency").
 TRANSCRIPT_SIGNAL_TYPE = "transcript"
-TRANSCRIPT_QUEUE_SIZE = 50
+LATENCY_SIGNAL_TYPE = "latency"
+SIGNAL_QUEUE_SIZE = 50
 
 
 class SessionState(StrEnum):
@@ -74,6 +77,8 @@ class AgentEvents(Protocol):
     def idle_timeout(self) -> None: ...
 
     def transcript(self, role: str, text: str, interrupted: bool) -> None: ...
+
+    def latency(self, stages: list[dict[str, Any]], total: float) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -126,6 +131,7 @@ class DemoSession:
     id: str
     key: str = field(repr=False)  # capability the browser presents for this session
     vonage_session_id: str
+    options: CallOptions
     created_at: float
     expires_at: float
     state: SessionState = SessionState.STARTING
@@ -139,9 +145,9 @@ class DemoSession:
     supervisor: asyncio.Task[None] | None = field(default=None, repr=False)
     stop_requested: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     timers: list[asyncio.TimerHandle] = field(default_factory=list, repr=False)
-    # Transcript lines waiting to be signaled to the browser. Held only until sent.
-    transcripts: asyncio.Queue[dict[str, Any]] = field(
-        default_factory=lambda: asyncio.Queue(maxsize=TRANSCRIPT_QUEUE_SIZE), repr=False
+    # (signal type, data) waiting to be sent to the browser. Held only until sent.
+    signals: asyncio.Queue[tuple[str, dict[str, Any]]] = field(
+        default_factory=lambda: asyncio.Queue(maxsize=SIGNAL_QUEUE_SIZE), repr=False
     )
 
     @property
@@ -182,10 +188,18 @@ class DemoSession:
         self.request_end(EndReason.IDLE_TIMEOUT)
 
     def transcript(self, role: str, text: str, interrupted: bool) -> None:
+        self._signal(
+            TRANSCRIPT_SIGNAL_TYPE, {"role": role, "text": text, "interrupted": interrupted}
+        )
+
+    def latency(self, stages: list[dict[str, Any]], total: float) -> None:
+        self._signal(LATENCY_SIGNAL_TYPE, {"stages": stages, "total": total})
+
+    def _signal(self, signal_type: str, data: dict[str, Any]) -> None:
         if self.finished:
             return
         with contextlib.suppress(asyncio.QueueFull):  # the browser is far behind; drop it
-            self.transcripts.put_nowait({"role": role, "text": text, "interrupted": interrupted})
+            self.signals.put_nowait((signal_type, data))
 
     # --- Public view -----------------------------------------------------------
 
@@ -236,8 +250,11 @@ class SessionManager:
     def active_sessions(self) -> list[DemoSession]:
         return [s for s in self._sessions.values() if not s.finished]
 
-    async def create_session(self) -> CreatedSession:
-        """Create a routed Vonage session, two tokens, and start the agent."""
+    async def create_session(self, options: CallOptions | None = None) -> CreatedSession:
+        """Create a routed Vonage session, two tokens, and start the agent.
+
+        `options` are the waiting room's choices for this call, already checked.
+        """
         async with self._create_lock:
             self._prune_finished()
             now = self._clock()
@@ -254,6 +271,7 @@ class SessionManager:
                 id=secrets.token_urlsafe(12),
                 key=secrets.token_urlsafe(32),
                 vonage_session_id=vonage_session_id,
+                options=options or CallOptions.defaults(self._settings),
                 created_at=now,
                 expires_at=now + self._settings.max_session_seconds,
             )
@@ -353,9 +371,7 @@ class SessionManager:
         agent = session.agent
         run_task = asyncio.create_task(agent.run(), name=f"agent-{session.id}")
         stop_task = asyncio.create_task(session.stop_requested.wait(), name=f"stop-{session.id}")
-        signal_task = asyncio.create_task(
-            self._signal_transcripts(session), name=f"transcripts-{session.id}"
-        )
+        signal_task = asyncio.create_task(self._send_signals(session), name=f"signals-{session.id}")
         try:
             await asyncio.wait({run_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
             if not run_task.done():
@@ -378,26 +394,26 @@ class SessionManager:
                 timer.cancel()
             self._record_outcome(session, run_task)
 
-    async def _signal_transcripts(self, session: DemoSession) -> None:
-        """Send each transcript line to the browser as a Vonage Video signal.
+    async def _send_signals(self, session: DemoSession) -> None:
+        """Send transcript lines and reply timings to the browser as Vonage Video signals.
 
         Signals travel through the Vonage session, like the agent's audio. Nothing is
-        stored: each line is dropped once it's sent. A failed signal only costs that
+        stored: each one is dropped once it's sent. A failed signal only costs that
         line, never the call.
         """
         while True:
-            line = await session.transcripts.get()
+            signal_type, data = await session.signals.get()
             if session.stop_requested.is_set():
                 continue  # the browser is leaving; nobody would receive it
             try:
                 await self._run_blocking(
                     self._video.send_signal,
                     session.vonage_session_id,
-                    TRANSCRIPT_SIGNAL_TYPE,
-                    json.dumps(line),
+                    signal_type,
+                    json.dumps(data),
                 )
             except Exception as exc:
-                logger.warning(f"Session {session.id}: transcript signal failed: {exc}")
+                logger.warning(f"Session {session.id}: {signal_type} signal failed: {exc}")
 
     def _record_outcome(self, session: DemoSession, run_task: asyncio.Task[None]) -> None:
         exc = None if run_task.cancelled() else run_task.exception()

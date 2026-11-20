@@ -1,7 +1,8 @@
 """FastAPI server: serves the browser app and a small session API.
 
     GET  /api/health                 liveness, no secrets
-    POST /api/sessions               create a session; returns the browser's credentials
+    GET  /api/options                what the waiting room can offer (no secrets)
+    POST /api/sessions               create a session with the waiting room's choices
     GET  /api/sessions/{id}          session status            (needs the session key)
     POST /api/sessions/{id}/ready    browser can hear the agent (needs the session key)
     POST /api/sessions/{id}/end      stop the agent, idempotent (needs the session key)
@@ -24,6 +25,18 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.agent_process import ProcessAgent
+from app.call_options import (
+    INTERRUPT_WORDS_RANGE,
+    LANGUAGES,
+    MAX_INSTRUCTIONS_CHARS,
+    MAX_KEYTERMS_PER_CALL,
+    REPLY_PAUSES,
+    SPEED_RANGE,
+    CallOptions,
+    CallOptionsError,
+    VoiceDirectory,
+    parse_call_options,
+)
 from app.config import LOG_LEVELS, ConfigError, Settings, load_settings, setup_logging
 from app.session_manager import (
     AgentConnection,
@@ -48,7 +61,9 @@ def default_agent_factory(
     settings: Settings, connection: AgentConnection, session: DemoSession
 ) -> ProcessAgent:
     # Each agent runs in its own process; see app/agent_process.py for why.
-    return ProcessAgent(settings, connection, session, label=f"agent {session.id}")
+    return ProcessAgent(
+        settings, connection, session, label=f"agent {session.id}", options=session.options
+    )
 
 
 def create_app(
@@ -72,6 +87,7 @@ def create_app(
         else:
             app.state.config_problems = []
             app.state.settings = loaded
+            app.state.voices = VoiceDirectory(loaded)
             manager = SessionManager(
                 loaded,
                 video or VonageVideo(loaded.vonage_application_id, loaded.vonage_private_key.get()),
@@ -136,7 +152,20 @@ def create_app(
             raise HTTPException(415, "Send Content-Type: application/json")
         manager = manager_of(request)
         try:
-            created = await manager.create_session()
+            body = await request.json()
+        except ValueError as exc:
+            raise HTTPException(400, "The request body must be JSON") from exc
+        settings: Settings = request.app.state.settings
+        try:
+            options = parse_call_options(
+                body.get("options") if isinstance(body, dict) else None, settings
+            )
+        except CallOptionsError as exc:
+            raise HTTPException(
+                422, {"message": "Some call settings aren't valid.", "problems": exc.problems}
+            ) from exc
+        try:
+            created = await manager.create_session(options)
         except SessionLimitError as exc:
             if exc.retry_after:
                 raise HTTPException(
@@ -148,7 +177,6 @@ def create_app(
             raise HTTPException(502, str(exc)) from exc
 
         session = created.session
-        settings: Settings = request.app.state.settings
         return {
             "id": session.id,
             "sessionKey": session.key,
@@ -158,7 +186,36 @@ def create_app(
             "vonageSessionId": session.vonage_session_id,
             "token": created.browser_token,
             "agentMode": settings.agent_mode,
+            "options": session.options.to_json(),
             **_timing(session),
+        }
+
+    @app.get("/api/options")
+    async def call_options(request: Request) -> dict[str, Any]:
+        """What the waiting room can offer. Contains no keys."""
+        manager_of(request)  # 503 with the list of problems if .env isn't complete
+        settings: Settings = request.app.state.settings
+        recommended = [
+            {"id": voice_id, "name": name, "description": ""}
+            for voice_id, name in settings.elevenlabs_voices
+        ]
+        yours, status = ([], "unavailable")
+        if settings.agent_mode == "modular":
+            account, status = await request.app.state.voices.account_voices()
+            yours = [{"id": v.id, "name": v.name, "description": v.description} for v in account]
+        return {
+            "agentMode": settings.agent_mode,
+            "defaults": CallOptions.defaults(settings).to_json(),
+            "languages": [{"code": c, "name": n} for c, n in LANGUAGES.items()],
+            "openaiModels": list(settings.openai_models),
+            "voices": {"recommended": recommended, "yours": yours, "yoursStatus": status},
+            "limits": {
+                "maxKeyterms": MAX_KEYTERMS_PER_CALL,
+                "maxInstructionsChars": MAX_INSTRUCTIONS_CHARS,
+                "voiceSpeed": list(SPEED_RANGE),
+                "interruptMinWords": list(INTERRUPT_WORDS_RANGE),
+                "replyPauses": REPLY_PAUSES,
+            },
         }
 
     @app.get("/api/sessions/{session_id}")

@@ -82,6 +82,18 @@ Set `AGENT_MODE=modular` and `LOG_TRANSCRIPTS=true`, then restart.
 - [ ] Change `ELEVENLABS_VOICE_ID` to another voice and restart: the agent speaks in it.
 - [ ] Set `LOG_TRANSCRIPTS=false` afterwards.
 
+## Gate 3b: the waiting room
+
+- [ ] The four cards load with the `.env` defaults. With Voices: Read on the key, a
+      *Your ElevenLabs voices* group appears; without it, the Speak card says how to
+      enable it.
+- [ ] Pick another voice, a speed of 1.15×, `gpt-4.1-mini`, the *Patient* pause, and the
+      instruction "Answer like a patient science teacher". Start: the call summary shows
+      all of them, the voice and pace change, and replies follow the instruction.
+- [ ] Each reply shows a timing line; with *Patient*, Turn-taking is about 0.8 s.
+- [ ] Reload the page: your choices are still there. **Reset to defaults** restores `.env`.
+- [ ] Paste an invalid voice ID (`abc`): Start shows "voiceId must be an ElevenLabs voice ID".
+
 ## Gate 4: lifecycle and errors
 
 - [ ] **Close the tab** mid-call: within a few seconds the logs show the session ending

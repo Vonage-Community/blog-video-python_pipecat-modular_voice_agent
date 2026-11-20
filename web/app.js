@@ -1,13 +1,15 @@
 // Browser side of the demo.
 //
+// 0. The waiting room: pick how the agent listens, thinks, speaks, and takes turns.
+//    The server checks every choice before it uses it.
 // 1. Get microphone (and optional camera) access with the Vonage Video Web SDK.
-// 2. Ask our server for a session. It returns the browser's token only.
+// 2. Ask our server for a session with those choices. It returns the browser's token only.
 // 3. Join the routed Vonage Video session and publish.
 // 4. Subscribe to the AI agent's stream, recognised by the role in its
 //    connection data, and to nothing else.
 // 5. Once its audio can play, tell the server so the agent greets you once.
 // 6. Show the transcript signals the server sends: what Deepgram heard, and what
-//    the agent said.
+//    the agent said, plus how long each stage took before each reply.
 'use strict';
 
 const $ = (id) => document.getElementById(id);
@@ -28,6 +30,25 @@ const ui = {
   camera: $('camera'),
   leave: $('leave'),
   timeLeft: $('time-left'),
+  stages: $('stages'),
+  echoNote: $('echo-note'),
+  language: $('opt-language'),
+  keytermTags: $('keyterm-tags'),
+  keytermInput: $('keyterm-input'),
+  model: $('opt-model'),
+  instructions: $('opt-instructions'),
+  instructionsCount: $('instructions-count'),
+  voice: $('opt-voice'),
+  customVoiceField: $('custom-voice-field'),
+  voiceId: $('opt-voice-id'),
+  voicesNote: $('voices-note'),
+  speed: $('opt-speed'),
+  speedValue: $('speed-value'),
+  pause: $('opt-pause'),
+  words: $('opt-words'),
+  wordsValue: $('words-value'),
+  resetOptions: $('reset-options'),
+  callSummary: $('call-summary'),
   transcript: $('transcript'),
   transcriptLines: $('transcript-lines'),
   status: $('status'),
@@ -46,6 +67,212 @@ const END_MESSAGES = {
 };
 
 let call = null; // the conversation in progress, if any
+
+// --- Waiting room ------------------------------------------------------------------
+
+const CUSTOM_VOICE = '__custom__';
+const STORAGE_KEY = 'modular-voice-agent-options';
+const PAUSE_LABELS = { quick: 'Quick', relaxed: 'Relaxed', patient: 'Patient' };
+const room = { catalog: null, keyterms: [] };
+
+async function loadWaitingRoom() {
+  let catalog;
+  try {
+    catalog = await api('/api/options');
+  } catch (error) {
+    // Not configured yet: Start shows the list of problems, as before.
+    ui.stages.hidden = true;
+    return;
+  }
+  room.catalog = catalog;
+  if (catalog.agentMode === 'echo') {
+    ui.stages.hidden = true;
+    ui.echoNote.hidden = false;
+    return;
+  }
+  fillSelect(ui.language, catalog.languages.map((l) => [l.code, l.name]));
+  fillSelect(ui.model, catalog.openaiModels.map((m) => [m, m]));
+  fillVoices(catalog.voices);
+  const pauses = catalog.limits.replyPauses;
+  ui.pause.replaceChildren(
+    ...Object.entries(pauses).map(([value, secs]) => {
+      const label = document.createElement('label');
+      const input = document.createElement('input');
+      Object.assign(input, { type: 'radio', name: 'pause', value });
+      label.append(input, ` ${PAUSE_LABELS[value] || value} `);
+      const small = document.createElement('small');
+      small.textContent = `${secs}s`;
+      label.append(small);
+      return label;
+    }),
+  );
+  ui.instructions.maxLength = catalog.limits.maxInstructionsChars;
+  applyOptions({ ...catalog.defaults, ...savedOptions() });
+}
+
+function fillSelect(select, entries) {
+  select.replaceChildren(
+    ...entries.map(([value, text]) => Object.assign(document.createElement('option'), { value, text })),
+  );
+}
+
+function fillVoices({ recommended, yours, yoursStatus }) {
+  const group = (label, voices) => {
+    const optgroup = Object.assign(document.createElement('optgroup'), { label });
+    for (const v of voices) {
+      const text = v.description ? `${v.name} (${v.description})` : v.name;
+      optgroup.append(Object.assign(document.createElement('option'), { value: v.id, text }));
+    }
+    return optgroup;
+  };
+  const groups = [group('Recommended voices', recommended)];
+  const recommendedIds = new Set(recommended.map((v) => v.id));
+  const own = yours.filter((v) => !recommendedIds.has(v.id));
+  if (own.length) groups.push(group('Your ElevenLabs voices', own));
+  const other = group('Other', []);
+  other.append(Object.assign(document.createElement('option'), { value: CUSTOM_VOICE, text: 'Paste a voice ID…' }));
+  groups.push(other);
+  ui.voice.replaceChildren(...groups);
+  if (yoursStatus === 'missing_permission') {
+    ui.voicesNote.textContent =
+      'To list your own ElevenLabs voices here, give the API key the Voices: Read permission.';
+  }
+}
+
+function applyOptions(o) {
+  ui.language.value = o.language;
+  room.keyterms = [...(o.keyterms || [])];
+  renderKeyterms();
+  ui.model.value = o.openaiModel;
+  if (!ui.model.value) ui.model.selectedIndex = 0;
+  ui.instructions.value = o.instructions || '';
+  const known = [...ui.voice.options].some((opt) => opt.value === o.voiceId);
+  ui.voice.value = known ? o.voiceId : CUSTOM_VOICE;
+  ui.voiceId.value = known ? '' : o.voiceId || '';
+  ui.speed.value = o.voiceSpeed;
+  ui.words.value = o.interruptMinWords;
+  const pause = ui.pause.querySelector(`input[value="${o.replyPause}"]`) || ui.pause.querySelector('input');
+  if (pause) pause.checked = true;
+  renderOptionLabels();
+}
+
+function currentOptions() {
+  return {
+    language: ui.language.value,
+    keyterms: room.keyterms,
+    openaiModel: ui.model.value,
+    instructions: ui.instructions.value.trim(),
+    voiceId: ui.voice.value === CUSTOM_VOICE ? ui.voiceId.value.trim() : ui.voice.value,
+    voiceSpeed: Number(ui.speed.value),
+    interruptMinWords: Number(ui.words.value),
+    replyPause: ui.pause.querySelector('input:checked')?.value || 'quick',
+  };
+}
+
+function renderOptionLabels() {
+  ui.speedValue.textContent = `${Number(ui.speed.value).toFixed(2).replace(/0$/, '')}×`;
+  ui.wordsValue.textContent = ui.words.value;
+  ui.customVoiceField.hidden = ui.voice.value !== CUSTOM_VOICE;
+  const max = room.catalog?.limits.maxInstructionsChars || 500;
+  ui.instructionsCount.textContent = `${ui.instructions.value.length}/${max}`;
+}
+
+function renderKeyterms() {
+  for (const tag of ui.keytermTags.querySelectorAll('.tag')) tag.remove();
+  for (const term of room.keyterms) {
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = term;
+    const remove = Object.assign(document.createElement('button'), {
+      type: 'button',
+      textContent: '×',
+      title: `Remove ${term}`,
+    });
+    remove.setAttribute('aria-label', `Remove ${term}`);
+    remove.addEventListener('click', () => {
+      room.keyterms = room.keyterms.filter((t) => t !== term);
+      renderKeyterms();
+      saveOptions();
+    });
+    tag.append(remove);
+    ui.keytermTags.insertBefore(tag, ui.keytermInput);
+  }
+}
+
+function addKeyterm() {
+  const max = room.catalog?.limits.maxKeyterms || 20;
+  const words = ui.keytermInput.value.split(',').map((w) => w.trim()).filter(Boolean);
+  for (const word of words) {
+    if (!room.keyterms.includes(word) && room.keyterms.length < max) room.keyterms.push(word);
+  }
+  ui.keytermInput.value = '';
+  renderKeyterms();
+  saveOptions();
+}
+
+function savedOptions() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveOptions() {
+  if (!room.catalog || room.catalog.agentMode === 'echo') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentOptions()));
+  } catch {}
+}
+
+// The settings this call actually uses (as the server accepted them), shown in the room.
+function renderCallSummary(options) {
+  ui.callSummary.replaceChildren();
+  if (!options || call?.agentMode === 'echo') return;
+  const language = room.catalog?.languages.find((l) => l.code === options.language)?.name || options.language;
+  const voice = [...ui.voice.options].find((o) => o.value === options.voiceId)?.text.split(' (')[0] || options.voiceId;
+  const terms = options.keyterms.length ? `, ${options.keyterms.length} keyterm${options.keyterms.length > 1 ? 's' : ''}` : '';
+  const items = [
+    ['listen', 'Deepgram', `${language}${terms}`],
+    ['think', 'OpenAI', `${options.openaiModel}${options.instructions ? ', custom instructions' : ''}`],
+    ['speak', 'ElevenLabs', `${voice}, ${options.voiceSpeed}×`],
+    ['turns', 'Turn-taking', `${PAUSE_LABELS[options.replyPause]} pause, ${options.interruptMinWords} words to interrupt`],
+  ];
+  for (const [kind, name, value] of items) {
+    const item = document.createElement('li');
+    item.className = kind;
+    const label = document.createElement('strong');
+    label.textContent = name;
+    item.append(label, ` ${value}`);
+    ui.callSummary.append(item);
+  }
+}
+
+for (const el of [ui.language, ui.model, ui.voice, ui.voiceId, ui.speed, ui.words, ui.instructions]) {
+  el.addEventListener('input', () => {
+    renderOptionLabels();
+    saveOptions();
+  });
+}
+ui.pause.addEventListener('change', saveOptions);
+ui.keytermInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' || event.key === ',') {
+    event.preventDefault();
+    addKeyterm();
+  } else if (event.key === 'Backspace' && !ui.keytermInput.value && room.keyterms.length) {
+    room.keyterms.pop();
+    renderKeyterms();
+    saveOptions();
+  }
+});
+ui.keytermInput.addEventListener('blur', () => ui.keytermInput.value.trim() && addKeyterm());
+ui.keytermTags.addEventListener('click', (event) => {
+  if (event.target === ui.keytermTags) ui.keytermInput.focus();
+});
+ui.resetOptions.addEventListener('click', () => {
+  localStorage.removeItem(STORAGE_KEY);
+  if (room.catalog) applyOptions(room.catalog.defaults);
+});
 
 // --- Small helpers ---------------------------------------------------------------
 
@@ -210,6 +437,7 @@ function joinSession({ applicationId, vonageSessionId, token }) {
       }
     },
     'signal:transcript': onTranscript,
+    'signal:latency': onLatency,
     sessionReconnecting: () => setStatus('Network hiccup: reconnecting to Vonage Video…'),
     sessionReconnected: () => setStatus('Reconnected.'),
     sessionDisconnected: (event) => {
@@ -250,13 +478,52 @@ function onTranscript(event) {
   const item = document.createElement('li');
   item.className = line.role === 'user' ? 'heard' : 'said';
   const label = document.createElement('strong');
-  label.textContent = line.role === 'user' ? 'Deepgram heard: ' : 'Agent said: ';
-  item.append(label, document.createTextNode(line.text));
+  label.textContent = line.role === 'user' ? 'Deepgram heard' : 'Agent said';
+  const text = document.createElement('span');
+  text.textContent = line.text;
+  item.append(label, text);
   if (line.interrupted) {
     const note = document.createElement('em');
     note.textContent = ' (interrupted: only the words you heard)';
     item.append(note);
   }
+  ui.transcriptLines.append(item);
+  ui.transcript.hidden = false;
+  item.scrollIntoView({ block: 'nearest' });
+}
+
+// One per reply, sent when the agent starts speaking: how long you waited and where
+// the time went. Same rule as transcripts: only from the server.
+function onLatency(event) {
+  if (event.from) return;
+  let timing;
+  try {
+    timing = JSON.parse(event.data);
+  } catch {
+    return;
+  }
+  if (!Array.isArray(timing?.stages) || typeof timing.total !== 'number') return;
+  const item = document.createElement('li');
+  item.className = 'timing';
+  const total = document.createElement('strong');
+  total.textContent = `Replied after ${timing.total.toFixed(2)} s`;
+  const bar = document.createElement('span');
+  bar.className = 'bar';
+  bar.setAttribute('aria-hidden', 'true');
+  const parts = document.createElement('span');
+  parts.className = 'parts';
+  for (const { stage, secs } of timing.stages) {
+    const kind = stage.toLowerCase().replace(/[^a-z]/g, '');
+    const segment = document.createElement('span');
+    segment.className = `seg ${kind}`;
+    segment.style.flexGrow = String(Math.max(secs, 0.001));
+    bar.append(segment);
+    const part = document.createElement('span');
+    part.className = `part ${kind}`;
+    part.textContent = `${stage} ${secs.toFixed(2)}`;
+    parts.append(part);
+  }
+  item.append(total, bar, parts);
   ui.transcriptLines.append(item);
   ui.transcript.hidden = false;
   item.scrollIntoView({ block: 'nearest' });
@@ -423,11 +690,13 @@ async function start() {
     call.publisher = await createPublisher(call.useCamera);
 
     setStatus('Starting a session…');
-    const created = await api('/api/sessions', { method: 'POST', body: {} });
+    const options = room.catalog && room.catalog.agentMode !== 'echo' ? currentOptions() : undefined;
+    const created = await api('/api/sessions', { method: 'POST', body: options ? { options } : {} });
     Object.assign(call, { id: created.id, key: created.sessionKey, agentMode: created.agentMode });
     call.deadline = Date.now() + created.maxSessionSeconds * 1000;
 
     showCallUi();
+    renderCallSummary(created.options);
     startPolling();
     startCountdown();
     await joinSession(created);
@@ -509,3 +778,5 @@ window.addEventListener('pagehide', () => {
     );
   }
 });
+
+loadWaitingRoom();

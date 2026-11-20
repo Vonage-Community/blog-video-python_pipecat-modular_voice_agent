@@ -25,6 +25,16 @@ DEFAULT_OPENAI_MODEL = "gpt-4.1"
 # Default voices, which expire on December 31, 2026.
 DEFAULT_ELEVENLABS_VOICE_ID = "l7kNoIfnJKPg7779LI2t"
 DEFAULT_ELEVENLABS_MODEL = "eleven_flash_v2_5"
+DEFAULT_OPENAI_MODELS = ("gpt-4.1", "gpt-4.1-mini")
+# ElevenLabs' recommended replacements for its Default voices. Voice Library voices
+# work by ID on any paid plan, with no setup in your ElevenLabs account.
+DEFAULT_ELEVENLABS_VOICES = (
+    ("l7kNoIfnJKPg7779LI2t", "Eddie - Natural and Helpful"),
+    ("OZ0L6eISlOejga3XjDFt", "Talia - Warm Soft Guide"),
+    ("BFd5oBc2DDna33pSi4Gf", "Alicia - Polished Global Anchor"),
+    ("jSuBIjxMKhqIfb0wCK1F", "Baxter - Dry Calm Aussie"),
+    ("6WwXjDDEMyNmFG95zycZ", "Eldrin - Crisp British Baritone"),
+)
 AGENT_MODES = ("modular", "echo")
 MAX_KEYTERMS = 50
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
@@ -69,6 +79,14 @@ class Settings:
     openai_model: str = DEFAULT_OPENAI_MODEL
     elevenlabs_voice_id: str = DEFAULT_ELEVENLABS_VOICE_ID
     elevenlabs_model: str = DEFAULT_ELEVENLABS_MODEL
+    # What the waiting room offers. The per-call values below default to .env and can
+    # be changed for one call from the waiting room (see app/call_options.py).
+    openai_models: tuple[str, ...] = DEFAULT_OPENAI_MODELS
+    elevenlabs_voices: tuple[tuple[str, str], ...] = DEFAULT_ELEVENLABS_VOICES
+    extra_instructions: str = ""
+    elevenlabs_speed: float = 1.0
+    interrupt_min_words: int = 3
+    vad_stop_secs: float = 0.2
     # "modular" runs Deepgram -> OpenAI -> ElevenLabs. "echo" is a diagnostic that plays
     # a tone and echoes your microphone back through Vonage, with no AI providers.
     agent_mode: str = "modular"
@@ -169,6 +187,23 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     elif any(len(term) > 100 for term in keyterms):
         problems.append("Each DEEPGRAM_KEYTERMS term must be 100 characters or fewer")
 
+    openai_model = text("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL
+    models = tuple(m.strip() for m in text("OPENAI_MODELS").split(",") if m.strip())
+    models = tuple(dict.fromkeys((openai_model, *(models or DEFAULT_OPENAI_MODELS))))
+
+    voices: tuple[tuple[str, str], ...] = DEFAULT_ELEVENLABS_VOICES
+    if text("ELEVENLABS_VOICES"):
+        parsed = []
+        for entry in text("ELEVENLABS_VOICES").split(";"):
+            voice_id, _, name = entry.strip().partition(":")
+            if voice_id.strip() and name.strip():
+                parsed.append((voice_id.strip(), name.strip()))
+            elif entry.strip():
+                problems.append(
+                    "ELEVENLABS_VOICES entries must look like VOICE_ID:Name, separated by ;"
+                )
+        voices = tuple(parsed)
+
     log_level = text("LOG_LEVEL", "INFO").upper()
     if log_level not in LOG_LEVELS:
         problems.append(f"LOG_LEVEL must be one of {', '.join(LOG_LEVELS)}")
@@ -183,7 +218,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         deepgram_model=text("DEEPGRAM_MODEL") or DEFAULT_DEEPGRAM_MODEL,
         deepgram_language=text("DEEPGRAM_LANGUAGE") or DEFAULT_DEEPGRAM_LANGUAGE,
         deepgram_keyterms=keyterms,
-        openai_model=text("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL,
+        openai_model=openai_model,
+        openai_models=models,
+        elevenlabs_voices=voices,
         elevenlabs_voice_id=text("ELEVENLABS_VOICE_ID") or DEFAULT_ELEVENLABS_VOICE_ID,
         elevenlabs_model=text("ELEVENLABS_MODEL") or DEFAULT_ELEVENLABS_MODEL,
         agent_mode=agent_mode,

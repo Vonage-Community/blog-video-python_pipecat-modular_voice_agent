@@ -11,7 +11,10 @@ pipeline.
 
 ## What you will build
 
-- A web page where you click **Start conversation**, allow your microphone, and talk.
+- A **waiting room** where you build the agent before the call, one card per stage:
+  Deepgram's language and the words it should listen for; the OpenAI model and extra
+  instructions; the ElevenLabs voice and its speed; and how the agent takes turns.
+- A call page where you click **Start conversation**, allow your microphone, and talk.
 - A small FastAPI server that creates a **routed** Vonage Video session and two
   separate tokens: one for your browser, one for the agent. Only the browser's
   token ever leaves the server.
@@ -20,8 +23,8 @@ pipeline.
   model, and **ElevenLabs** text-to-speech. The spoken reply is published back into
   the session.
 - A **transcript panel** shows the text between the stages as you talk: what
-  Deepgram heard you say, and what the agent said. It reaches the page as Vonage
-  Video signals, and nothing is stored.
+  Deepgram heard you say, what the agent said, and how long each stage took before
+  each reply. It reaches the page as Vonage Video signals, and nothing is stored.
 - You hear the agent **through your Vonage subscription**, not through a direct
   connection to any provider. Talk over it to interrupt; mute, leave, or let it time
   out, and the agent leaves the call and closes all three provider connections.
@@ -86,8 +89,10 @@ one connector instance per process. It also means a stuck agent can always be ki
   [platform.openai.com/api-keys](https://platform.openai.com/api-keys). A ChatGPT
   subscription does not include API credits.
 - **An ElevenLabs API key on a paid plan** (Starter or above), from
-  [ElevenLabs API keys](https://elevenlabs.io/app/developers/api-keys). The free plan
-  can't use Voice Library voices, including this sample's default, through the API.
+  [ElevenLabs API keys](https://elevenlabs.io/app/developers/api-keys), with the
+  **Text to Speech** permission. Add **Voices: Read** too if you want the waiting room
+  to list the voices in your account. The free plan can't use Voice Library voices,
+  including this sample's recommended voices, through the API.
 - **Docker** with Docker Compose v2 (Docker Desktop on macOS/Windows).
 - A current **Chrome, Edge, Firefox, or Safari** and a microphone. Headphones help.
 - **Outbound network access** from the container to Vonage (HTTPS plus WebRTC media),
@@ -176,9 +181,21 @@ something, and talk over it to interrupt. Click **Leave** when you're done.
 
 Stop the server with `Ctrl-C` (or `docker compose down`).
 
-## Change the voice, the prompt, the model, or the vocabulary
+## Choose each stage in the waiting room
 
-Each stage is configured on its own:
+Before you start a call, the page shows one card per stage. Your choices apply to that
+call only and are saved in your browser for next time; **Reset to defaults** returns
+to the values in `.env`. The server checks every value against an allowed list or range
+before it uses it, so the page can't pick an unlisted model or an invalid voice.
+
+| Card | What you choose | Allowed |
+|---|---|---|
+| Listen (Deepgram) | Language, and words to listen for | 10 languages; up to 20 keyterms |
+| Think (OpenAI) | Model, and extra instructions | `OPENAI_MODELS`; up to 500 characters, added after the built-in rules |
+| Speak (ElevenLabs) | Voice, and speed | Recommended voices, your account's voices, or a pasted voice ID; 0.7× to 1.2× |
+| Take turns (Pipecat) | Pause before replying, and words needed to interrupt | Quick 0.2 s, Relaxed 0.5 s, or Patient 0.8 s; 1 to 5 words |
+
+The defaults, and the lists the cards offer, come from `.env`:
 
 - **Vocabulary:** Deepgram may hear "Pipecat" as "pipe cat". List the words it should
   listen for in `DEEPGRAM_KEYTERMS` (for example `DEEPGRAM_KEYTERMS=Vonage,Pipecat`),
@@ -198,13 +215,13 @@ Each stage is configured on its own:
 - **Language:** set `DEEPGRAM_LANGUAGE` (for example `es`), and the prompt already tells
   the agent to reply in the language you speak. `eleven_flash_v2_5` speaks 32 languages.
 - **Prompt:** edit `SYSTEM_INSTRUCTION` in [`app/modular_agent.py`](app/modular_agent.py).
-- **Interruptions:** while the agent talks, it stops once Deepgram has heard three of
-  your words, so "okay" or "mm-hm" doesn't cut it off. Change `INTERRUPT_MIN_WORDS` in
-  `app/modular_agent.py` to make it more or less eager.
+- **Interruptions:** by default, while the agent talks, it stops once Deepgram has
+  heard three of your words, so "okay" or "mm-hm" doesn't cut it off.
 
 ### How long replies take
 
-The server logs a `Latency:` line for each reply, showing where the time went. On
+The transcript panel shows, for each reply, how long you waited and which stage the
+time went to, and the server logs the same breakdown as a `Latency:` line. On
 2026-11-19, over seven replies, the agent took 0.94 to 1.32 seconds (typically about
 1.0 s) from deciding you'd stopped talking to sending its first audio:
 
@@ -238,6 +255,8 @@ All settings live in `.env` ([`.env.example`](.env.example) documents each one).
 | `ELEVENLABS_API_KEY` | (required for `modular` mode) | ElevenLabs API key (paid plan). |
 | `ELEVENLABS_VOICE_ID` | `l7kNoIfnJKPg7779LI2t` | ElevenLabs voice ID. |
 | `ELEVENLABS_MODEL` | `eleven_flash_v2_5` | ElevenLabs text-to-speech model. |
+| `OPENAI_MODELS` | `gpt-4.1,gpt-4.1-mini` | Models the waiting room offers. |
+| `ELEVENLABS_VOICES` | five recommended voices | Voices the waiting room recommends, as `VOICE_ID:Name;…`. |
 | `AGENT_MODE` | `modular` | `echo` is a no-provider diagnostic: the agent beeps, then echoes your mic. |
 | `MAX_ACTIVE_SESSIONS` | `1` | Concurrent sessions (1–5). Each runs its own agent process. |
 | `MAX_SESSION_SECONDS` | `600` | Hard limit per session. |
@@ -364,6 +383,7 @@ them only for this sample.
 ```text
 app/main.py            FastAPI routes, static files, startup checks
 app/config.py          settings from .env, validation, log redaction
+app/call_options.py    the waiting room's choices: allowed values, checks, voice list
 app/video_sessions.py  Vonage routed session + per-participant tokens
 app/session_manager.py session registry, supervisor, limits and timeouts
 app/agent_process.py   one process per agent, and the pipe protocol between them

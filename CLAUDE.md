@@ -41,6 +41,10 @@ docker compose up --build                    # run the app on http://localhost:8
 - Transcripts go agent process → pipe → server → Vonage Video signal (`send_signal`,
   type `transcript`) → browser. The server queues them only until sent. The browser
   accepts only signals with no `from` connection (sent by the server).
+- The waiting room's choices are validated in `app/call_options.py` (allowed lists and
+  ranges) and travel to the agent process over the pipe, then onto `Settings` with
+  `CallOptions.apply_to`. Never pass a browser value to a provider unchecked. The
+  ElevenLabs key is only used server-side, including for listing voices.
 - `on_pipeline_error` ends the session only for fatal errors or unusable processors,
   and names the stage. Services retry recoverable errors themselves.
 - One agent per OS process (`app/agent_process.py`). Every session has a tracked

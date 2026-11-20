@@ -237,7 +237,7 @@ async def test_transcripts_are_signaled_to_the_session_and_not_kept(settings):
         "text": "Pipecat is an open source",
         "interrupted": True,
     }
-    assert session.transcripts.empty()
+    assert session.signals.empty()
     assert "Pipecat" not in json.dumps(session.status(0))
     await manager.shutdown()
 
@@ -248,7 +248,7 @@ async def test_a_failed_signal_does_not_end_the_call(settings):
     manager, _ = make_manager(settings, video=video)
     created = await manager.create_session()
     created.session.transcript("user", "hello", False)
-    await wait_until(lambda: created.session.transcripts.empty())
+    await wait_until(lambda: created.session.signals.empty())
     await asyncio.sleep(0.05)
     assert not created.session.finished
     await manager.shutdown()
@@ -262,3 +262,27 @@ async def test_no_transcript_signals_once_the_call_is_ending(settings):
     created.session.transcript("agent", "goodbye", False)
     await manager.end_session(created.session, EndReason.LEFT)
     assert video.signals == []
+
+
+async def test_latency_is_signaled_too(settings):
+    video = FakeVideo()
+    manager, _ = make_manager(settings, video=video)
+    created = await manager.create_session()
+    created.session.latency([{"stage": "OpenAI", "secs": 0.4}], 1.0)
+    await wait_until(lambda: len(video.signals) == 1)
+    assert video.signals[0][1] == "latency"
+    assert json.loads(video.signals[0][2]) == {
+        "stages": [{"stage": "OpenAI", "secs": 0.4}],
+        "total": 1.0,
+    }
+    await manager.shutdown()
+
+
+async def test_sessions_keep_their_call_options(settings):
+    from app.call_options import parse_call_options
+
+    manager, agents = make_manager(settings)
+    options = parse_call_options({"openaiModel": "gpt-4.1-mini"}, settings)
+    created = await manager.create_session(options)
+    assert created.session.options.openai_model == "gpt-4.1-mini"
+    await manager.shutdown()

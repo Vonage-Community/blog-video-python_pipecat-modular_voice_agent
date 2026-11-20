@@ -9,6 +9,7 @@ Nothing here connects to Vonage or any AI provider successfully.
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
@@ -35,6 +36,7 @@ from pipecat.utils.errors import ErrorCategory  # noqa: E402
 
 from app.agent_process import ProcessAgent  # noqa: E402
 from app.modular_agent import (  # noqa: E402
+    SYSTEM_INSTRUCTION,
     EchoAgent,
     MicrophoneEcho,
     MicrophoneGate,
@@ -44,6 +46,7 @@ from app.modular_agent import (  # noqa: E402
     create_agent,
     describe_failure,
     failed_stage,
+    stage_latency,
 )
 from app.session_manager import AgentConnection  # noqa: E402
 from tests.conftest import with_settings  # noqa: E402
@@ -196,6 +199,53 @@ def test_short_replies_do_not_interrupt_the_agent(settings, transport):
     assert [type(s) for s in strategies.start] == [MinWordsUserTurnStartStrategy]
     assert strategies.start[0]._min_words == 3
     assert strategies.stop  # Smart Turn defaults are kept
+
+
+def test_waiting_room_choices_reach_the_services(settings, transport):
+    custom = with_settings(
+        settings,
+        extra_instructions="Answer like a patient tutor.",
+        elevenlabs_speed=1.15,
+        interrupt_min_words=5,
+        vad_stop_secs=0.8,
+    )
+    worker = ModularAgent(custom, CONNECTION, RecordedEvents()).build_pipeline(transport)
+    by_type = {type(p): p for p in pipeline_processors(worker)}
+    instruction = by_type[OpenAILLMService]._settings.system_instruction
+    assert instruction.startswith(SYSTEM_INSTRUCTION)  # fixed rules first
+    assert instruction.endswith("Answer like a patient tutor.")
+    assert by_type[ElevenLabsTTSService]._settings.speed == 1.15
+    aggregator = next(
+        p for p in pipeline_processors(worker) if type(p).__name__ == "LLMUserAggregator"
+    )
+    assert aggregator._params.user_turn_strategies.start[0]._min_words == 5
+    assert aggregator._params.vad_analyzer.params.stop_secs == 0.8
+
+
+def test_latency_is_summed_by_stage_in_pipeline_order():
+    def part(label, secs):
+        return SimpleNamespace(label=label, duration_secs=secs)
+
+    breakdown = SimpleNamespace(
+        contributions=[
+            part("endpointing wait", 0.2),
+            part("transcription", 0.1),
+            part("turn detection", 0.002),
+            part("LLM inference", 0.46),
+            part("sentence aggregation", 0.07),
+            part("speech synthesis", 0.18),
+            part("pipeline", 0.001),
+        ],
+        total_secs=1.013,
+    )
+    stages, total = stage_latency(breakdown)
+    assert stages == [
+        {"stage": "Turn-taking", "secs": 0.202},
+        {"stage": "Deepgram", "secs": 0.1},
+        {"stage": "OpenAI", "secs": 0.53},
+        {"stage": "ElevenLabs", "secs": 0.18},
+    ]
+    assert total == 1.013
 
 
 def test_no_keyterms_sends_none(settings, transport):

@@ -12,6 +12,7 @@ import pytest
 
 from app import agent_process
 from app.agent_process import MAX_TRANSCRIPT_CHARS, AgentProcessError, ProcessAgent
+from app.call_options import CallOptions
 from app.session_manager import AgentConnection
 from tests.fakes import wait_until
 
@@ -24,6 +25,7 @@ class RecordedEvents:
         self.names: list[str] = []
         self.failures: list[str] = []
         self.transcripts: list[tuple[str, str, bool]] = []
+        self.latencies: list[tuple[list[dict], float]] = []
 
     def agent_joined(self) -> None:
         self.names.append("agent_joined")
@@ -43,6 +45,10 @@ class RecordedEvents:
     def transcript(self, role: str, text: str, interrupted: bool) -> None:
         self.names.append("transcript")
         self.transcripts.append((role, text, interrupted))
+
+    def latency(self, stages: list[dict], total: float) -> None:
+        self.names.append("latency")
+        self.latencies.append((stages, total))
 
 
 @pytest.fixture
@@ -182,6 +188,26 @@ def test_transcripts_are_validated_and_capped(settings):
     transcripts = events.transcripts
     assert transcripts[:2] == [("user", "hello", False), ("agent", "hi", True)]
     assert len(transcripts) == 3 and len(transcripts[2][1]) == MAX_TRANSCRIPT_CHARS
+
+
+def test_latency_events_are_validated(settings):
+    events = RecordedEvents()
+    agent = make_agent(settings, events)
+    line = {
+        "event": "latency",
+        "stages": [{"stage": "OpenAI", "secs": 0.4567}, {"stage": "x"}, "junk"],
+        "total": 1.0,
+    }
+    agent._dispatch(json.dumps(line).encode())
+    agent._dispatch(b'{"event": "latency", "stages": "nope", "total": 1}')
+    assert events.latencies == [([{"stage": "OpenAI", "secs": 0.457}], 1.0)]
+
+
+def test_options_travel_over_the_pipe_not_argv(settings):
+    options = CallOptions.defaults(settings)
+    agent = ProcessAgent(settings, CONNECTION, RecordedEvents(), options=options)
+    assert agent._options == options
+    assert "gpt-4.1" not in " ".join(agent._command)
 
 
 def test_token_is_not_passed_on_the_command_line(settings):

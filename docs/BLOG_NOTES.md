@@ -35,6 +35,14 @@ The README's "Architecture" diagram has the full version.
    Unmute; Leave.
 5. `AGENT_MODE=echo` to check Vonage alone.
 
+## The waiting room (the post's opening screenshot)
+
+Four cards, one per stage (Listen, Think, Speak, Take turns), each with the choices a
+speech-to-speech model makes for you. This is the "why not Part 1" in one picture.
+Teaching points: the server re-checks every choice (`app/call_options.py`), the
+ElevenLabs key stays server-side even when listing voices, and Voice Library voices
+work by ID on a paid plan, so a new account's empty My Voices doesn't matter.
+
 ## The main screenshot
 
 The transcript panel mid-conversation: *Deepgram heard:* and *Agent said:* lines, one

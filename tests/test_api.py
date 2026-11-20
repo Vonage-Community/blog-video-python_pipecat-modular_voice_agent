@@ -56,6 +56,7 @@ def test_create_returns_only_what_the_browser_needs(client, agents):
         "vonageSessionId",
         "token",
         "agentMode",
+        "options",
         "maxSessionSeconds",
         "expiresAt",
     }
@@ -164,3 +165,40 @@ def test_shutdown_stops_running_agents(settings, agents):
     with TestClient(app) as client:
         create(client)
     assert agents.agents[0].finished
+
+
+def test_options_describe_the_waiting_room_without_secrets(client, monkeypatch):
+    from app.call_options import Voice, VoiceDirectory
+
+    async def fake_voices(self):
+        return [Voice("abcdefghij0123456789", "My Designed Voice", "british")], "ok"
+
+    monkeypatch.setattr(VoiceDirectory, "account_voices", fake_voices)
+    response = client.get("/api/options")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["defaults"]["openaiModel"] == "gpt-4.1"
+    assert body["openaiModels"] == ["gpt-4.1", "gpt-4.1-mini"]
+    assert body["voices"]["recommended"][0]["name"].startswith("Eddie")
+    assert body["voices"]["yours"][0]["name"] == "My Designed Voice"
+    assert body["voices"]["yoursStatus"] == "ok"
+    text = response.text
+    for secret in ("sk-test-0123456789abcdef", "sk_test_not_a_real_key", "dg-test-not-a-real-key"):
+        assert secret not in text
+
+
+def test_session_uses_the_waiting_room_choices(client, agents):
+    response = client.post(
+        "/api/sessions",
+        json={"options": {"openaiModel": "gpt-4.1-mini", "keyterms": ["Vonage"]}},
+    )
+    assert response.status_code == 201
+    assert response.json()["options"]["openaiModel"] == "gpt-4.1-mini"
+    assert agents.agents[0].events.options.keyterms == ("Vonage",)
+
+
+def test_invalid_choices_are_explained_and_start_nothing(client, agents):
+    response = client.post("/api/sessions", json={"options": {"openaiModel": "gpt-9"}})
+    assert response.status_code == 422
+    assert any("openaiModel" in p for p in response.json()["detail"]["problems"])
+    assert agents.agents == []

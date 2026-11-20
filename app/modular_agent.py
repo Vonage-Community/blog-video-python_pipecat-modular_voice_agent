@@ -33,6 +33,7 @@ from typing import Any
 import numpy as np
 from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     ErrorFrame,
     Frame,
@@ -81,9 +82,6 @@ You can't browse the internet or look up today's news, so say so instead of
 guessing about current events.
 If you are not sure about something, say so. If anyone asks, you are an AI
 model, not a human."""
-
-# Words you must say over the agent before it stops talking.
-INTERRUPT_MIN_WORDS = 3
 
 GREETING_PROMPT = (
     "The user has just joined the call and can hear you now. Greet them in one short "
@@ -302,6 +300,33 @@ def describe_failure(stage: str, frame: ErrorFrame) -> str:
     return " ".join(part for part in (f"{stage} failed: {error}", hint) if part)
 
 
+# Which pipeline stage each part of Pipecat's latency breakdown belongs to.
+_STAGE_OF_CONTRIBUTION = {
+    "endpointing wait": "Turn-taking",
+    "turn detection": "Turn-taking",
+    "transcription": "Deepgram",
+    "LLM inference": "OpenAI",
+    "sentence aggregation": "OpenAI",  # waiting for OpenAI to finish a sentence
+    "turn completion": "OpenAI",
+    "speech synthesis": "ElevenLabs",
+}
+STAGE_ORDER = ("Turn-taking", "Deepgram", "OpenAI", "ElevenLabs", "Other")
+
+
+def stage_latency(breakdown: Any) -> tuple[list[dict[str, Any]], float]:
+    """Sum one reply's latency breakdown by pipeline stage, in pipeline order."""
+    totals: dict[str, float] = {}
+    for part in breakdown.contributions:
+        stage = _STAGE_OF_CONTRIBUTION.get(part.label, "Other")
+        totals[stage] = totals.get(stage, 0.0) + part.duration_secs
+    stages = [
+        {"stage": stage, "secs": round(totals[stage], 3)}
+        for stage in STAGE_ORDER
+        if totals.get(stage, 0.0) >= 0.005
+    ]
+    return stages, round(breakdown.total_secs, 3)
+
+
 class MicrophoneGate(FrameProcessor):
     """Drops microphone audio until the browser can hear the agent.
 
@@ -341,12 +366,17 @@ class ModularAgent(VonageAgent):
             ),
         )
 
-        # Think: a text reply from the whole conversation so far.
+        # Think: a text reply from the whole conversation so far. Instructions from the
+        # waiting room come after the fixed rules, which they can't replace.
+        instruction = SYSTEM_INSTRUCTION
+        if settings.extra_instructions:
+            instruction += "\n\nThe user also asked you to follow these instructions:\n"
+            instruction += settings.extra_instructions
         llm = OpenAILLMService(
             api_key=settings.openai_api_key.get(),
             settings=OpenAILLMService.Settings(
                 model=settings.openai_model,
-                system_instruction=SYSTEM_INSTRUCTION,
+                system_instruction=instruction,
             ),
         )
 
@@ -356,6 +386,7 @@ class ModularAgent(VonageAgent):
             settings=ElevenLabsTTSService.Settings(
                 model=settings.elevenlabs_model,
                 voice=settings.elevenlabs_voice_id,
+                speed=settings.elevenlabs_speed,
             ),
         )
 
@@ -363,15 +394,16 @@ class ModularAgent(VonageAgent):
         # No speech-to-speech model decides when you've finished talking anymore, so
         # the user aggregator does: Silero VAD hears speech start and stop, and
         # Pipecat's default Smart Turn v3 model decides whether the sentence is done.
-        # Both run locally on the CPU.
+        # Both run locally on the CPU. stop_secs is the silence before Smart Turn
+        # decides; longer means fewer interruptions of you, and slower replies.
         user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
             context,
             user_params=LLMUserAggregatorParams(
-                vad_analyzer=SileroVADAnalyzer(),
+                vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=settings.vad_stop_secs)),
                 user_turn_strategies=UserTurnStrategies(
-                    # While the agent talks, it only stops once Deepgram has heard
-                    # three words, so "okay" or "mm-hm" doesn't cut it off.
-                    start=[MinWordsUserTurnStartStrategy(min_words=INTERRUPT_MIN_WORDS)],
+                    # While the agent talks, it only stops once Deepgram has heard this
+                    # many of your words, so "okay" or "mm-hm" doesn't cut it off.
+                    start=[MinWordsUserTurnStartStrategy(min_words=settings.interrupt_min_words)],
                 ),
             ),
         )
@@ -394,6 +426,8 @@ class ModularAgent(VonageAgent):
         @latency.event_handler("on_latency_breakdown")
         async def on_latency_breakdown(observer: Any, breakdown: Any) -> None:
             logger.info("Latency: " + " | ".join(breakdown.turn_contribution_lines()))
+            stages, total = stage_latency(breakdown)
+            self._events.latency(stages, total)
 
         pipeline = Pipeline(
             [
