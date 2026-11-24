@@ -109,7 +109,9 @@ class VideoService(Protocol):
 
     def create_token(self, session_id: str, role: Any, ttl_seconds: int) -> str: ...
 
-    def send_signal(self, session_id: str, signal_type: str, data: str) -> None: ...
+    def send_signal(
+        self, session_id: str, signal_type: str, data: str, connection_id: str | None = None
+    ) -> None: ...
 
 
 class SessionLimitError(Exception):
@@ -138,6 +140,7 @@ class DemoSession:
     agent_joined_flag: bool = False
     user_audio_connected_flag: bool = False
     ready: bool = False
+    browser_connection_id: str | None = None  # where transcript signals go
     end_reason: EndReason | None = None
     error: str | None = None
     finished_at: float | None = None
@@ -305,13 +308,14 @@ class SessionManager:
     def key_matches(session: DemoSession, key: str) -> bool:
         return secrets.compare_digest(session.key.encode(), key.encode())
 
-    async def mark_ready(self, session: DemoSession) -> bool:
+    async def mark_ready(self, session: DemoSession, connection_id: str | None = None) -> bool:
         """Start the conversation once. Returns False if it had already started."""
         if session.finished or session.state == SessionState.ENDING:
             raise SessionFinishedError()
         if session.ready:
             return False
         session.ready = True
+        session.browser_connection_id = connection_id
         session.state = SessionState.ACTIVE
         assert session.agent is not None
         await session.agent.start_conversation()
@@ -411,6 +415,7 @@ class SessionManager:
                     session.vonage_session_id,
                     signal_type,
                     json.dumps(data),
+                    session.browser_connection_id,
                 )
             except Exception as exc:
                 logger.warning(f"Session {session.id}: {signal_type} signal failed: {exc}")

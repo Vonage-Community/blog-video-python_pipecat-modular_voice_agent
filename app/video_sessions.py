@@ -83,6 +83,14 @@ class VonageVideo:
         )
         return token.decode()
 
-    def send_signal(self, session_id: str, signal_type: str, data: str) -> None:
-        """Send a signal to every participant in the session (the browser listens)."""
-        self._signal_client.video.send_signal(session_id, SignalData(type=signal_type, data=data))
+    def send_signal(
+        self, session_id: str, signal_type: str, data: str, connection_id: str | None = None
+    ) -> None:
+        """Send a signal to one connection, or to everyone in the session if none is given.
+
+        The browser passes its connection ID when it's ready, so signals skip the agent:
+        the native connector can't parse them and logs an error for each one.
+        """
+        self._signal_client.video.send_signal(
+            session_id, SignalData(type=signal_type, data=data), connection_id
+        )

@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi import Body, FastAPI, Header, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
@@ -55,6 +55,10 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 # Module level on purpose: FastAPI resolves these (string) annotations against
 # module globals, so a local alias would silently become a query parameter.
 AuthHeader = Annotated[str | None, Header()]
+# The browser's Vonage Video connection ID, so transcript signals go only to the browser.
+ConnectionId = Annotated[
+    str | None, Body(embed=True, alias="connectionId", pattern=r"^[A-Za-z0-9-]{1,64}$")
+]
 
 
 def default_agent_factory(
@@ -227,11 +231,14 @@ def create_app(
 
     @app.post("/api/sessions/{session_id}/ready")
     async def session_ready(
-        request: Request, session_id: str, authorization: AuthHeader = None
+        request: Request,
+        session_id: str,
+        authorization: AuthHeader = None,
+        connection_id: ConnectionId = None,
     ) -> dict[str, Any]:
         manager, session = authorized_session(request, session_id, authorization)
         try:
-            started = await manager.mark_ready(session)
+            started = await manager.mark_ready(session, connection_id)
         except SessionFinishedError as exc:
             raise HTTPException(409, "This session has already ended") from exc
         return {"started": started, **session.status(time.time())}

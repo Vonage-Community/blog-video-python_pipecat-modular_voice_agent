@@ -30,10 +30,12 @@ class FakeVideo:
     def create_token(self, session_id: str, role: str, ttl_seconds: int) -> str:
         return f"token-for-{role}-{session_id}"
 
-    def send_signal(self, session_id: str, signal_type: str, data: str) -> None:
+    def send_signal(
+        self, session_id: str, signal_type: str, data: str, connection_id: str | None = None
+    ) -> None:
         if self.fail_signals:
             raise OSError("signal failed")
-        self.signals.append((session_id, signal_type, data))
+        self.signals.append((session_id, signal_type, data, connection_id))
 
 
 class FakeAgent:

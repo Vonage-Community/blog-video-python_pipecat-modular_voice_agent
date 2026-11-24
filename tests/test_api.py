@@ -103,6 +103,22 @@ def test_ready_starts_the_conversation_once(client, agents):
     assert agents.agents[0].conversations_started == 1
 
 
+def test_ready_accepts_the_browser_connection_id(client, agents):
+    session = create(client)
+    url = f"/api/sessions/{session['id']}/ready"
+    response = client.post(url, headers=auth(session), json={"connectionId": "a1b2-c3d4"})
+    assert response.status_code == 200
+    assert response.json()["started"] is True
+
+
+def test_ready_rejects_a_malformed_connection_id(client, agents):
+    session = create(client)
+    url = f"/api/sessions/{session['id']}/ready"
+    response = client.post(url, headers=auth(session), json={"connectionId": "<script>"})
+    assert response.status_code == 422
+    assert agents.agents[0].conversations_started == 0
+
+
 def test_ready_requires_the_session_key(client, agents):
     session = create(client)
     response = client.post(f"/api/sessions/{session['id']}/ready")

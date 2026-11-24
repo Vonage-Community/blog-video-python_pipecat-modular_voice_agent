@@ -286,3 +286,18 @@ async def test_sessions_keep_their_call_options(settings):
     created = await manager.create_session(options)
     assert created.session.options.openai_model == "gpt-4.1-mini"
     await manager.shutdown()
+
+
+async def test_signals_go_to_the_browser_connection_once_known(settings):
+    video = FakeVideo()
+    manager, _ = make_manager(settings, video=video)
+    created = await manager.create_session()
+    session = created.session
+    session.transcript("user", "before ready", False)
+    await wait_until(lambda: len(video.signals) == 1)
+    await manager.mark_ready(session, "conn-abc-123")
+    session.transcript("user", "after ready", False)
+    await wait_until(lambda: len(video.signals) == 2)
+    assert video.signals[0][3] is None
+    assert video.signals[1][3] == "conn-abc-123"
+    await manager.shutdown()

@@ -587,7 +587,13 @@ async function signalReady() {
   call.ready = true;
   setStatus('Starting the conversation…');
   try {
-    await api(`/api/sessions/${call.id}/ready`, { method: 'POST', key: call.key });
+    // Our connection ID lets the server send transcript signals to this page only.
+    const connectionId = call.session.connection?.connectionId;
+    await api(`/api/sessions/${call.id}/ready`, {
+      method: 'POST',
+      key: call.key,
+      body: connectionId ? { connectionId } : undefined,
+    });
     call.live = true;
     call.statusTimer = setInterval(renderLiveStatus, 250);
     renderLiveStatus();
