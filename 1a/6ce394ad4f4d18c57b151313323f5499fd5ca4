@@ -1,0 +1,14 @@
+README.md
+  h_d5be481ddf6211 215-216,398,400
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1a6ce394ad4f4d18c57b151313323f5499fd5ca4",
+  "prompts": {},
+  "humans": {
+    "h_d5be481ddf6211": {
+      "author": "Benjamin Aronov <benjamin@benyas.com>"
+    }
+  }
+}
