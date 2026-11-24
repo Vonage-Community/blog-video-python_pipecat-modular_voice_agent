@@ -1,0 +1,20 @@
+app/session_manager.py
+  h_d5be481ddf6211 322,324
+app/video_sessions.py
+  h_d5be481ddf6211 94-99
+tests/test_api.py
+  h_d5be481ddf6211 112-113
+tests/test_video_sessions.py
+  h_d5be481ddf6211 17-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1140c3847aa06446550c8537dfe108d434c6da4e",
+  "prompts": {},
+  "humans": {
+    "h_d5be481ddf6211": {
+      "author": "Benjamin Aronov <benjamin@benyas.com>"
+    }
+  }
+}
