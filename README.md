@@ -216,7 +216,10 @@ The defaults, and the lists the cards offer, come from `.env`:
   `eleven_flash_v2_5` speaks 32 languages. Only English has been tested end to end.
 - **Prompt:** edit `SYSTEM_INSTRUCTION` in [`app/modular_agent.py`](app/modular_agent.py).
 - **Interruptions:** by default, while the agent talks, it stops once Deepgram has
-  heard three of your words, so "okay" or "mm-hm" doesn't cut it off.
+  heard three of your words, so "okay" or "mm-hm" doesn't cut it off. At the time of
+  writing, this needs `pace_audio_to_real_time` in `app/modular_agent.py`: the Vonage
+  transport hands a whole reply to the native connector in about a second, so without
+  pacing Pipecat thinks the agent has stopped talking, and one word interrupts it.
 
 ### How long replies take
 
@@ -361,6 +364,9 @@ beep and your echo, Vonage works end to end.
   transcript panel lives only in your open page, and logs omit what you say unless
   you set `LOG_TRANSCRIPTS=true`.
 - **The agent only listens.** It doesn't see your camera, and it has no avatar.
+- **Audio pacing is a workaround.** `pace_audio_to_real_time` waits for each audio
+  chunk's playing time before handing over the next. Remove it once the Vonage
+  transport paces audio itself.
 - **One room per session.** Each session holds your browser and one agent; other
   streams are ignored by the page.
 - Tested platforms: see [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).

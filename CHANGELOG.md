@@ -7,6 +7,10 @@ and documentation corrections land here, as patch versions.
 
 Not tagged yet: waiting for the live manual test (`docs/MANUAL_TEST.md`).
 
+- Audio is handed to the Vonage connector at playing speed (`pace_audio_to_real_time`).
+  The transport buffered a whole reply in about a second, so Pipecat believed the agent
+  had stopped talking and a one-word "okay" interrupted it. Found while building the
+  Dinner With da Vinci sample (2026-11-24).
 - Started from a copy of `vonage-pipecat-openai-realtime` (commit `2ff4b77`, MIT,
   © Vonage): browser app, FastAPI session API, limits, and one process per agent.
 - Replaced OpenAI Realtime with a modular Pipecat 1.16.0 pipeline: Deepgram

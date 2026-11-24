@@ -82,6 +82,7 @@ the real classes:
 | Greeting trigger | Pipecat examples greet in `on_client_connected`. | Greet on the browser's `POST /ready`, because only the browser knows it can play audio. |
 | Connector instances | The Video Connector guide allows one connector instance per process. | One OS process per session (`app/agent_process.py`). |
 | Routed sessions | Required by the project brief; Kitt Phi's tested tutorial uses routed sessions. | Always routed. |
+| When the agent stops speaking | `VonageVideoConnectorOutputTransport.write_audio_frame` calls the native `add_audio`, which buffers and returns at once. On 2026-11-24, Pipecat logged *Bot stopped speaking* 0.6 s into a reply that played for 15 s, and a one-word "Okay." mid-reply interrupted it (`MinWordsUserTurnStartStrategy ... should_trigger=True num_spoken_words=1`). Pipecat's websocket transports pace with `_write_audio_sleep`. | `pace_audio_to_real_time()` waits for each chunk's playing time, 0.2 s ahead. With it, the same "Okay." logged `should_trigger=False` and the reply played to the end. |
 
 ## Platforms
 

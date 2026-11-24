@@ -38,6 +38,9 @@ docker compose up --build                    # run the app on http://localhost:8
 - VAD belongs on `LLMUserAggregatorParams`, not on the transport params (Pipecat
   removed the transport field and ignores it silently).
 - `MicrophoneGate` drops audio until `POST /ready`; the greeting is sent once.
+- `pace_audio_to_real_time` stays until the Vonage transport paces audio itself.
+  Without it, Pipecat thinks the agent stopped speaking about a second into each
+  reply, so the three-word interrupt rule stops applying.
 - Transcripts go agent process → pipe → server → Vonage Video signal (`send_signal`,
   type `transcript`) → browser. The server queues them only until sent. The browser
   accepts only signals with no `from` connection (sent by the server).

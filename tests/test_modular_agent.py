@@ -36,6 +36,7 @@ from pipecat.utils.errors import ErrorCategory  # noqa: E402
 
 from app.agent_process import ProcessAgent  # noqa: E402
 from app.modular_agent import (  # noqa: E402
+    AUDIO_LEAD_SECONDS,
     SYSTEM_INSTRUCTION,
     EchoAgent,
     MicrophoneEcho,
@@ -46,6 +47,7 @@ from app.modular_agent import (  # noqa: E402
     create_agent,
     describe_failure,
     failed_stage,
+    pace_audio_to_real_time,
     stage_latency,
 )
 from app.session_manager import AgentConnection  # noqa: E402
@@ -340,3 +342,25 @@ async def test_real_agent_process_reports_a_failed_join(settings, valid_env, mon
     assert events.failures, "the failed join was not reported"
     assert "agent_joined" not in events.names
     assert agent._process is not None and agent._process.returncode is not None
+
+
+async def test_audio_is_handed_over_at_playing_speed():
+    """Without pacing, a whole reply reaches the Vonage connector in about a second."""
+    import time
+
+    written: list[float] = []
+
+    class FakeOutput:
+        async def write_audio_frame(self, frame):
+            written.append(time.monotonic())
+            return True
+
+    output = FakeOutput()
+    pace_audio_to_real_time(SimpleNamespace(output=lambda: output))  # type: ignore[arg-type]
+    chunk = OutputAudioRawFrame(audio=b"\x00\x00" * 2400, sample_rate=24000, num_channels=1)
+    start = time.monotonic()
+    for _ in range(10):  # ten 100 ms chunks: one second of audio
+        assert await output.write_audio_frame(chunk) is True
+    elapsed = time.monotonic() - start
+    assert 1.0 - AUDIO_LEAD_SECONDS - 0.05 <= elapsed <= 1.0 + 0.1
+    assert len(written) == 10

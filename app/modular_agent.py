@@ -26,8 +26,10 @@ never talks to any of them directly: every sound reaches you through Vonage Vide
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
+import time
 from typing import Any
 
 import numpy as np
@@ -89,6 +91,36 @@ GREETING_PROMPT = (
 )
 
 
+# How much of the agent's audio to hand the Vonage connector ahead of time, so playback
+# never runs dry between chunks.
+AUDIO_LEAD_SECONDS = 0.2
+
+
+def pace_audio_to_real_time(transport: VonageVideoConnectorTransport) -> None:
+    """Make Pipecat's "bot is speaking" match what you hear.
+
+    At the time of writing, the Vonage transport hands each audio chunk to the native
+    connector, which buffers it and returns at once. A whole reply is handed over in about
+    a second, so Pipecat decides the bot stopped speaking while you still hear it
+    for many seconds more. Rules that depend on it then misfire: after the first second of
+    a reply, one word interrupts instead of three. Waiting for each chunk's playing time
+    keeps the two clocks together, the way Pipecat's websocket transports do.
+    """
+    output = transport.output()
+    write = output.write_audio_frame  # type: ignore[attr-defined]
+    play_until = 0.0
+
+    async def paced_write(frame: OutputAudioRawFrame) -> bool:
+        nonlocal play_until
+        play_until = max(play_until, time.monotonic())
+        written = await write(frame)
+        play_until += len(frame.audio) / (2 * frame.num_channels * frame.sample_rate)
+        await asyncio.sleep(max(0.0, play_until - time.monotonic() - AUDIO_LEAD_SECONDS))
+        return written
+
+    output.write_audio_frame = paced_write  # type: ignore[attr-defined]
+
+
 def connection_role(client: dict[str, Any]) -> str | None:
     """Read the role our server put in the token's connection data."""
     try:
@@ -145,6 +177,7 @@ class VonageAgent:
             ),
         )
         self._register_transport_events(transport)
+        pace_audio_to_real_time(transport)
 
         worker = self.build_pipeline(transport)
         self._register_worker_events(worker)
