@@ -91,6 +91,9 @@ class VonageVideo:
         The browser passes its connection ID when it's ready, so signals skip the agent:
         the native connector can't parse them and logs an error for each one.
         """
-        self._signal_client.video.send_signal(
-            session_id, SignalData(type=signal_type, data=data), connection_id
-        )
+        signal = SignalData(type=signal_type, data=data)
+        if connection_id is None:
+            # The SDK's validator rejects an explicit None, so leave the argument out.
+            self._signal_client.video.send_signal(session_id, signal)
+        else:
+            self._signal_client.video.send_signal(session_id, signal, connection_id)

@@ -109,6 +109,8 @@ def test_ready_accepts_the_browser_connection_id(client, agents):
     response = client.post(url, headers=auth(session), json={"connectionId": "a1b2-c3d4"})
     assert response.status_code == 200
     assert response.json()["started"] is True
+    stored = client.app.state.manager.get(session["id"])
+    assert stored.browser_connection_id == "a1b2-c3d4"
 
 
 def test_ready_rejects_a_malformed_connection_id(client, agents):

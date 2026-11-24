@@ -319,7 +319,9 @@ class SessionManager:
         session.state = SessionState.ACTIVE
         assert session.agent is not None
         await session.agent.start_conversation()
+        target = "its connection" if connection_id else "everyone in the session"
         logger.info(f"Session {session.id}: browser ready, conversation started")
+        logger.info(f"Session {session.id}: transcript signals go to {target}")
         return True
 
     async def end_session(self, session: DemoSession, reason: EndReason) -> None:
