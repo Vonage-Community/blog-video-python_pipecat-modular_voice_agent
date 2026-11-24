@@ -1,0 +1,24 @@
+CHANGELOG.md
+  h_d5be481ddf6211 10-13
+CLAUDE.md
+  h_d5be481ddf6211 41-43
+README.md
+  h_d5be481ddf6211 219-222,367-369
+app/modular_agent.py
+  h_d5be481ddf6211 29,32,94-123,180
+docs/DEPENDENCIES.md
+  h_d5be481ddf6211 85
+tests/test_modular_agent.py
+  h_d5be481ddf6211 39,50,345-366
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1100faabff661b156daf018da6cf529bd6e9ff73",
+  "prompts": {},
+  "humans": {
+    "h_d5be481ddf6211": {
+      "author": "Benjamin Aronov <benjamin@benyas.com>"
+    }
+  }
+}
