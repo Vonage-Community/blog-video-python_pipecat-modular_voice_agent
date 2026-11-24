@@ -212,8 +212,8 @@ The defaults, and the lists the cards offer, come from `.env`:
   licensed to use; don't clone a real person's voice without their permission.
 - **Model:** set `OPENAI_MODEL` to another OpenAI chat model your key can use. Voice
   needs fast first tokens, so prefer models without long reasoning.
-- **Language:** set `DEEPGRAM_LANGUAGE` (for example `es`), and the prompt already tells
-  the agent to reply in the language you speak. `eleven_flash_v2_5` speaks 32 languages.
+- **Language:** set `DEEPGRAM_LANGUAGE` (for example `es`) for the language you speak.
+  `eleven_flash_v2_5` speaks 32 languages. Only English has been tested end to end.
 - **Prompt:** edit `SYSTEM_INSTRUCTION` in [`app/modular_agent.py`](app/modular_agent.py).
 - **Interruptions:** by default, while the agent talks, it stops once Deepgram has
   heard three of your words, so "okay" or "mm-hm" doesn't cut it off.
@@ -395,9 +395,9 @@ docs/                  dependency notes, manual test plan, blog notes
 
 ## Related reading (optional)
 
-- Blog post: *Build a Custom AI Voice Agent With Vonage, Deepgram, and ElevenLabs*
+- Blog post: *Build a Modular AI Voice Agent With Vonage Video and Pipecat*
   (link coming when it's published)
-- [vonage-pipecat-openai-realtime](https://github.com/Vonage-Community/vonage-pipecat-openai-realtime):
+- [blog-video-python_pipecat-openai_realtime_agent](https://github.com/Vonage-Community/blog-video-python_pipecat-openai_realtime_agent):
   the same app with one OpenAI Realtime speech-to-speech model instead of three
   services. You don't need it to run this one.
 - [Vonage Video Transport for Pipecat](https://developer.vonage.com/en/video/guides/vonage-video-connector-pipecat-transport)
